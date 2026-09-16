@@ -3,6 +3,7 @@
 namespace Peppermint\Contacts\Contracts;
 
 use Illuminate\Support\Collection;
+use Peppermint\Contacts\Exceptions\ProfileConflict;
 use Peppermint\Contacts\Exceptions\StaleContact;
 use Peppermint\Contacts\Exceptions\StoreUnavailable;
 use Peppermint\Contacts\Models\Contact;
@@ -92,6 +93,21 @@ interface ContactStore
      * @throws StaleContact Jemand war schneller.
      */
     public function upsert(array $attributes): Contact;
+
+    /**
+     * Zwei Zeilen, die derselbe Mensch sind, zu einer machen.
+     *
+     * Pflichtfunktion, kein Zusatz: Dubletten entstehen unvermeidlich —
+     * jemand legt an, bevor er sucht. Ohne Zusammenfuehren sammeln sie sich,
+     * und der Bestand ist nach einem halben Jahr derselbe Zustand wie
+     * vorher, nur an einem anderen Ort.
+     *
+     * `$into` bleibt, `$from` loest sich auf.
+     *
+     * @throws ProfileConflict Beide Seiten tragen ein Profil, wo nur eines sein darf.
+     * @throws StoreUnavailable Gegenstelle weg.
+     */
+    public function merge(Contact|int $into, Contact|int $from): Contact;
 
     /**
      * Nimmt dieser Speicher Aenderungen an?

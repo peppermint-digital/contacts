@@ -119,6 +119,37 @@ zentral niemand: Sie sieht echt aus, taucht in der Suche auf, und beim nächsten
 ist sie weg — oder sie bleibt und ist die zweite Wahrheit, gegen die dieses Paket gebaut
 ist. Abschaltbar über `contacts.guard_direct_writes`, für Produkte im Umstieg.
 
+## Zusammenführen ist Pflicht, kein Zusatz
+
+Dubletten entstehen unvermeidlich — jemand legt an, bevor er sucht. Ohne `merge` sammeln
+sie sich, und der Bestand ist nach einem halben Jahr derselbe Zustand wie vorher, nur an
+einem anderen Ort.
+
+```php
+$store->merge(into: $bleibt, from: $geht);
+```
+
+- **Gefüllte Felder der bleibenden Zeile bleiben.** Nur Lücken werden gefüllt. Andersherum
+  wäre das Zusammenführen ein Weg, gute Daten durch ältere zu ersetzen.
+- **Notizen werden angehängt, nicht gewählt** — zwei Bemerkungen zu einem Menschen sind
+  beide wahr.
+- **Beziehungen wandern in beide Richtungen.** Die aufgelöste Zeile kann Ansprechpartner
+  haben *und* selbst einer sein; wer nur eine Richtung umhängt, verliert die andere lautlos.
+- **Alte Verweise lösen weiter auf.** `contact_merges` hält fest, wohin eine Nummer
+  gegangen ist — sonst zeigt ein Auftrag von vor drei Monaten ins Leere. Ältere Spuren
+  werden mitgezogen, damit keine Kette entsteht.
+- **Bei doppelten Produkt-Profilen wird abgesagt.** Tragen beide Seiten eine Kundennummer,
+  kann ein Paket nicht wissen, welche gilt — eine zu wählen hieße, die andere wegzuwerfen.
+  `ProfileConflict` nennt die Tabelle, und es wurde nichts geändert.
+
+Die Profiltabellen trägt jedes Produkt selbst ein:
+
+```php
+'profiles' => [
+    ['table' => 'customers', 'key' => 'contact_id', 'unique' => true],
+],
+```
+
 ## Adoption ist Pflicht, kein Zusatz
 
 Ein Paket, das nur auf frischen Tabellen läuft, kann ein gewachsenes Produkt nicht
@@ -150,8 +181,9 @@ ohne etwas zu messen.
 
 ## Stand
 
-Etappen **E1** (Gerüst und Kern) und **E2** (Speicher-Vertrag). Es folgen: E3 Brain-Seite
-mit MCP-Werkzeugen, E4 erster Abnehmer (Verwaltung), E5 zweiter Abnehmer (CRM).
+Etappen **E1** (Gerüst und Kern), **E2** (Speicher-Vertrag) und der Paket-Teil von **E3**
+(Zusammenführen). Offen in E3: die Brain-Seite selbst — Tabellen, MCP-Werkzeuge,
+Oberfläche. Danach E4 erster Abnehmer (Verwaltung), E5 zweiter Abnehmer (CRM).
 
 Das Übertragungsformat, an das sich die Brain-Seite in E3 halten muss, steht als Tabelle
 im Docblock von `Contracts\ContactStore` — damit beide Seiten gegen dieselbe Beschreibung

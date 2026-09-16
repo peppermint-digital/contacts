@@ -84,7 +84,31 @@ return [
         'phones' => 'contact_phones',
         'addresses' => 'contact_addresses',
         'relations' => 'contact_relations',
+        'merges' => 'contact_merges',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ring-3-Profile: was beim Zusammenfuehren mit umgehaengt werden muss
+    |--------------------------------------------------------------------------
+    |
+    | Das Paket kennt die Profiltabellen der Produkte nicht — und soll sie
+    | nicht kennen. Es muss sie beim Zusammenfuehren aber mitnehmen, sonst
+    | bleibt die Kundennummer am aufgeloesten Kontakt haengen und ist weg.
+    |
+    | Jedes Produkt traegt hier seine eigenen ein:
+    |
+    |   'profiles' => [
+    |       ['table' => 'customers',        'key' => 'contact_id', 'unique' => true],
+    |       ['table' => 'crm_deal_profiles','key' => 'contact_id'],
+    |   ],
+    |
+    | `unique` heisst: Es kann je Kontakt nur EINE Zeile geben. Haben dann
+    | beide Seiten eine, ist das kein Fall, den ein Paket entscheiden darf —
+    | es sagt ab und nennt die Tabelle.
+    |
+    */
+    'profiles' => [],
 
     'columns' => [
         // 'formatted_name' => 'company_name',

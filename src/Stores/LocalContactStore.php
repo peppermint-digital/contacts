@@ -3,7 +3,10 @@
 namespace Peppermint\Contacts\Stores;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Peppermint\Contacts\Contracts\ContactStore;
+use Peppermint\Contacts\Merging\ContactMerger;
 use Peppermint\Contacts\Models\Contact;
 use Peppermint\Contacts\Models\ContactEmail;
 
@@ -19,7 +22,45 @@ class LocalContactStore implements ContactStore
 {
     public function find(string|int $id): ?Contact
     {
-        return Contact::query()->find($id);
+        $contact = Contact::query()->find($id);
+
+        if ($contact !== null) {
+            return $contact;
+        }
+
+        // Die Zeile gibt es nicht mehr — vielleicht, weil sie
+        // zusammengefuehrt wurde. Ein Auftrag von vor drei Monaten zeigt auf
+        // die alte Nummer, und er soll den Menschen weiter finden, statt ins
+        // Leere zu zeigen.
+        return $this->followMergeTrail($id);
+    }
+
+    /**
+     * Wohin ist diese Nummer gegangen?
+     *
+     * Die Spur ist bereits flachgezogen — beim Zusammenfuehren werden
+     * aeltere Eintraege mitgezogen, sodass hier ein einzelner Schritt
+     * genuegt und keine Kette entstehen kann, die sich im Kreis dreht.
+     */
+    private function followMergeTrail(string|int $id): ?Contact
+    {
+        $tabelle = config('contacts.tables.merges', 'contact_merges');
+
+        if (! Schema::hasTable($tabelle)) {
+            return null;
+        }
+
+        $spur = DB::table($tabelle)->where('from_id', $id)->first();
+
+        return $spur === null ? null : Contact::query()->find($spur->into_id);
+    }
+
+    public function merge(Contact|int $into, Contact|int $from): Contact
+    {
+        $ziel = $into instanceof Contact ? $into : Contact::query()->findOrFail($into);
+        $quelle = $from instanceof Contact ? $from : Contact::query()->findOrFail($from);
+
+        return (new ContactMerger)->merge($ziel, $quelle);
     }
 
     public function findByUid(string $uid): ?Contact

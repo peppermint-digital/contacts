@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Peppermint\Contacts\Contacts\StoreGuard;
 use Peppermint\Contacts\Contracts\ContactStore;
+use Peppermint\Contacts\Exceptions\ProfileConflict;
 use Peppermint\Contacts\Exceptions\StaleContact;
 use Peppermint\Contacts\Exceptions\StoreUnavailable;
 use Peppermint\Contacts\Models\Contact;
@@ -135,6 +136,49 @@ class BrainContactStore implements ContactStore
         if ($contact === null) {
             throw StoreUnavailable::forWrite();
         }
+
+        return $contact;
+    }
+
+    /**
+     * Zusammengefuehrt wird zentral.
+     *
+     * Nicht lokal und dann hochgeschickt: Das Zusammenfuehren loest eine
+     * Zeile auf, und wer das an der Kopie tut, hat eine Kopie ohne Zeile und
+     * ein Zentrum mit. Beim naechsten Spiegeln waere sie wieder da — und der
+     * Mensch davor haelt das fuer einen Fehler.
+     */
+    public function merge(Contact|int $into, Contact|int $from): Contact
+    {
+        $response = $this->ask('contacts.merge', [
+            'into' => $into instanceof Contact ? $into->getKey() : $into,
+            'from' => $from instanceof Contact ? $from->getKey() : $from,
+        ]);
+
+        if ($response === null) {
+            throw StoreUnavailable::forWrite();
+        }
+
+        // Die Absage wegen doppelter Profile kommt von der Brain-Seite; das
+        // Paket reicht sie durch, statt sie in ein allgemeines „ging nicht"
+        // zu verwandeln. Der Mensch muss erfahren, WO es klemmt.
+        if (($response['conflict'] ?? false) === true) {
+            throw new ProfileConflict($response['tables'] ?? []);
+        }
+
+        $contact = $this->mirror($response['data'] ?? []);
+
+        if ($contact === null) {
+            throw StoreUnavailable::forWrite();
+        }
+
+        // Die aufgeloeste Zeile muss auch aus der Kopie verschwinden, sonst
+        // steht die Dublette lokal weiter in der Suche.
+        $fromId = $from instanceof Contact ? $from->getKey() : $from;
+
+        StoreGuard::bypass(function () use ($fromId): void {
+            Contact::query()->whereKey($fromId)->delete();
+        });
 
         return $contact;
     }
