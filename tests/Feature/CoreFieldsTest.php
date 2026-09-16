@@ -78,3 +78,13 @@ it('loescht die Anhaengsel mit, wenn der Kontakt geht', function (): void {
     expect(ContactEmail::where('contact_id', $id)->count())->toBe(0)
         ->and(ContactAddress::where('contact_id', $id)->count())->toBe(0);
 });
+
+it('nimmt einen ausgeschriebenen Laendernamen auf', function (): void {
+    // Zwei Zeichen waren eine Annahme (ISO-Kuerzel), keine Messung. Die
+    // Produkte fuehren „Deutschland". Auf SQLite faellt so etwas nicht auf —
+    // MySQL quittiert es mit „Data too long".
+    $contact = Contact::factory()->organisation()->create();
+    $contact->addresses()->create(['type' => 'main', 'street' => 'Hauptweg 1', 'country' => 'Deutschland']);
+
+    expect($contact->refresh()->addresses->first()->country)->toBe('Deutschland');
+});

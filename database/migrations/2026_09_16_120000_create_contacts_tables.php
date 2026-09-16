@@ -132,7 +132,9 @@ return new class extends Migration
             $table->string('street')->nullable();
             $table->string('zip', 20)->nullable();
             $table->string('city')->nullable();
-            $table->string('country', 2)->nullable();
+            // Ausgeschrieben, nicht als Kuerzel: Die Produkte fuehren
+            // 'Deutschland', nicht 'DE'. Siehe die Verbreiterungs-Migration.
+            $table->string('country')->nullable();
             $table->boolean('is_default')->default(false);
             $table->timestamps();
         });
