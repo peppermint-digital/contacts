@@ -1,5 +1,6 @@
 <?php
 
+use Peppermint\Contacts\Exceptions\BrainRejected;
 use Peppermint\Contacts\Exceptions\StaleContact;
 use Peppermint\Contacts\Exceptions\StoreUnavailable;
 use Peppermint\Contacts\Models\Contact;
@@ -209,4 +210,19 @@ it('loescht beim Spiegeln nichts, was die Antwort gar nicht mitbringt', function
 
     expect($gespiegelt->emails)->toHaveCount(1)
         ->and($gespiegelt->addresses)->toHaveCount(1);
+});
+
+it('reicht eine fachliche Absage des Brains durch, statt sie in „nicht erreichbar" zu verwandeln', function (): void {
+    // Die beiden Faelle fuehlen sich gleich an, verlangen aber das Gegenteil
+    // voneinander: Bei Ausfall wartet man, bei Ablehnung aendert man die Daten.
+    $brain = (new FakeBrain)->answers('upsert', [
+        'ok' => false,
+        'error' => 'Ein Kontakt braucht mindestens eine Kennung.',
+    ]);
+
+    expect(fn () => $brain->store()->upsert(['kind' => 'org']))
+        ->toThrow(BrainRejected::class)
+        ->and(fn () => $brain->store()->upsert(['kind' => 'org']))
+        ->toThrow(fn (BrainRejected $e) => expect($e->getMessage())
+            ->toContain('mindestens eine Kennung'));
 });

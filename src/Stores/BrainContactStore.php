@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Peppermint\Contacts\Contacts\StoreGuard;
 use Peppermint\Contacts\Contracts\ContactStore;
+use Peppermint\Contacts\Exceptions\BrainRejected;
 use Peppermint\Contacts\Exceptions\ProfileConflict;
 use Peppermint\Contacts\Exceptions\StaleContact;
 use Peppermint\Contacts\Exceptions\StoreUnavailable;
@@ -131,13 +132,37 @@ class BrainContactStore implements ContactStore
             throw new StaleContact($response['current'] ?? []);
         }
 
+        $this->pruefeAntwort($response);
+
         $contact = $this->mirror($response['data'] ?? []);
 
         if ($contact === null) {
-            throw StoreUnavailable::forWrite();
+            throw new BrainRejected('Die Antwort enthielt keinen Kontakt.', $response);
         }
 
         return $contact;
+    }
+
+    /**
+     * Eine Antwort, die zwar ankam, aber eine Absage ist.
+     *
+     * Ohne diese Pruefung landete jede fachliche Ablehnung im
+     * „nicht erreichbar"-Zweig — und der Satz, den die Gegenseite mitgeschickt
+     * hat, verschwand. Wer dann sucht, prueft Netz und Token, waehrend in
+     * Wahrheit ein Feld fehlte.
+     *
+     * @param  array<string, mixed>  $response
+     */
+    private function pruefeAntwort(array $response): void
+    {
+        if (($response['ok'] ?? true) !== false) {
+            return;
+        }
+
+        throw new BrainRejected(
+            (string) ($response['error'] ?? 'Kein Grund mitgeteilt.'),
+            $response,
+        );
     }
 
     /**
@@ -271,7 +296,12 @@ class BrainContactStore implements ContactStore
         $id = $row['id'] ?? null;
 
         if ($id === null) {
-            Log::warning('Kontakte: Antwort ohne Kennung erhalten — nicht gespiegelt.');
+            // Die Antwort mitloggen, nicht nur ihr Fehlen: Ohne sie ist von
+            // aussen nicht zu unterscheiden, ob die Gegenseite abgelehnt,
+            // etwas anderes geschickt oder schlicht nichts gefunden hat.
+            Log::warning('Kontakte: Antwort ohne Kennung erhalten — nicht gespiegelt.', [
+                'antwort' => mb_substr(json_encode($row, JSON_UNESCAPED_UNICODE) ?: '', 0, 500),
+            ]);
 
             return null;
         }
