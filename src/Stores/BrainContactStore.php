@@ -73,7 +73,7 @@ class BrainContactStore implements ContactStore
     public function find(string|int $id): ?Contact
     {
         return $this->readOne(
-            fn (): ?array => $this->ask('contacts.get', ['id' => $id]),
+            fn (): ?array => $this->ask('get', ['id' => $id]),
             fn (): ?Contact => Contact::query()->find($id),
         );
     }
@@ -81,7 +81,7 @@ class BrainContactStore implements ContactStore
     public function findByUid(string $uid): ?Contact
     {
         return $this->readOne(
-            fn (): ?array => $this->ask('contacts.get', ['uid' => $uid]),
+            fn (): ?array => $this->ask('get', ['uid' => $uid]),
             fn (): ?Contact => Contact::query()->where('uid', $uid)->first(),
         );
     }
@@ -89,7 +89,7 @@ class BrainContactStore implements ContactStore
     public function findByEmail(string $email): ?Contact
     {
         return $this->readOne(
-            fn (): ?array => $this->ask('contacts.find-by-email', ['email' => $email]),
+            fn (): ?array => $this->ask('find-by-email', ['email' => $email]),
             fn (): ?Contact => Contact::query()
                 ->whereHas('emails', fn ($e) => $e->where('value', $email))
                 ->first(),
@@ -98,7 +98,7 @@ class BrainContactStore implements ContactStore
 
     public function search(string $query, int $limit = 25): Collection
     {
-        $response = $this->ask('contacts.search', ['query' => $query, 'limit' => $limit]);
+        $response = $this->ask('search', ['query' => $query, 'limit' => $limit]);
 
         if ($response === null) {
             $this->warnFallback('Suche');
@@ -114,7 +114,7 @@ class BrainContactStore implements ContactStore
 
     public function upsert(array $attributes): Contact
     {
-        $response = $this->ask('contacts.upsert', $attributes);
+        $response = $this->ask('upsert', $attributes);
 
         // Nicht erreichbar heisst beim Schreiben etwas anderes als beim
         // Lesen. Lesen kann aus der Kopie bedient werden; Schreiben nicht —
@@ -150,7 +150,7 @@ class BrainContactStore implements ContactStore
      */
     public function merge(Contact|int $into, Contact|int $from): Contact
     {
-        $response = $this->ask('contacts.merge', [
+        $response = $this->ask('merge', [
             'into' => $into instanceof Contact ? $into->getKey() : $into,
             'from' => $from instanceof Contact ? $from->getKey() : $from,
         ]);
@@ -276,11 +276,22 @@ class BrainContactStore implements ContactStore
             return null;
         }
 
-        $kinder = [
-            'emails' => $row['emails'] ?? [],
-            'phones' => $row['phones'] ?? [],
-            'addresses' => $row['addresses'] ?? [],
-        ];
+        // Nur, was die Antwort auch WIRKLICH mitbringt.
+        //
+        // „Nicht mitgeschickt" ist nicht „zentral geloescht". Eine
+        // Trefferliste liefert aus gutem Grund die Kurzform ohne Adressen —
+        // wuerde der Spiegel daraus eine leere Liste machen, wischte jede
+        // Suche die Adressen aller Treffer aus der lokalen Kopie. Bei
+        // Ausfall stuenden die Kontakte dann ohne Anschrift da, und genau
+        // dafuer gibt es den Spiegel.
+        $kinder = array_filter(
+            [
+                'emails' => $row['emails'] ?? null,
+                'phones' => $row['phones'] ?? null,
+                'addresses' => $row['addresses'] ?? null,
+            ],
+            fn (?array $zeilen): bool => $zeilen !== null,
+        );
 
         $kern = collect($row)
             ->except(['emails', 'phones', 'addresses', 'relations'])
@@ -300,7 +311,7 @@ class BrainContactStore implements ContactStore
             // Nur wenn noetig: Beim Kontakt mit Namen waere es eine Zeile
             // Arbeit, die gleich darauf wieder ueberschrieben wird.
             if (! $contact->hasIdentifier()) {
-                foreach ($kinder['emails'] as $email) {
+                foreach ($kinder['emails'] ?? [] as $email) {
                     if (isset($email['value'])) {
                         $contact->withEmail($email['value']);
                     }

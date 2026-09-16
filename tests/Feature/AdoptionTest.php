@@ -59,3 +59,25 @@ it('behaelt den Paketnamen fuer Felder, die nicht abgebildet sind', function ():
     expect(Contact::column('formatted_name'))->toBe('company_name')
         ->and(Contact::column('given_name'))->toBe('given_name');
 });
+
+it('kommt ohne Versionsspalte aus, statt den Kontakt unspeicherbar zu machen', function (): void {
+    // Eine gewachsene Tabelle bringt keinen Versionsstempel mit — `customers`
+    // in der Verwaltung gibt es seit Jahren und kennt keine `version`.
+    config([
+        'contacts.tables.contacts' => 'customers',
+        'contacts.columns.formatted_name' => 'company_name',
+    ]);
+
+    Schema::create('customers', function (Blueprint $table): void {
+        $table->id();
+        $table->string('kind', 20)->default('org');
+        $table->string('company_name')->nullable();
+        $table->timestamps();
+    });
+
+    $contact = Contact::create(['company_name' => 'Beispiel GmbH']);
+    $contact->update(['company_name' => 'Beispiel AG']);
+
+    expect($contact->hasVersionColumn())->toBeFalse()
+        ->and($contact->fresh()->company_name)->toBe('Beispiel AG');
+});

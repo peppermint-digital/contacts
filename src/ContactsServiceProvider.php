@@ -59,12 +59,26 @@ class ContactsServiceProvider extends ServiceProvider
         }
 
         $bridge = self::BRIDGE;
-        $tool = (string) config('contacts.brain_tool', 'contacts-tool');
 
         return new BrainContactStore(
-            function (string $capability, array $arguments) use ($bridge, $tool): ?array {
+            function (string $capability, array $arguments) use ($bridge): ?array {
+                // Vier einzelne Werkzeuge statt eines Sammelwerkzeugs mit
+                // Unterbefehl. Das ist nicht Geschmack: Im Brain haengen
+                // Rechte am Werkzeugnamen — die Werkzeugauswahl je Channel
+                // und der Riegel vor loeschenden Aufrufen. Ein Sammelwerkzeug
+                // waere entweder ganz frei oder ganz gesperrt, und
+                // „Kontakte lesen ja, zusammenfuehren nein" liesse sich gar
+                // nicht ausdruecken.
+                $tool = config("contacts.brain_tools.{$capability}");
+
+                if ($tool === null) {
+                    Log::warning("Kontakte: Fuer \"{$capability}\" ist kein Brain-Werkzeug eingetragen.");
+
+                    return null;
+                }
+
                 try {
-                    return $bridge::call($tool, ['capability' => $capability] + $arguments);
+                    return $bridge::call((string) $tool, $arguments);
                 } catch (\Throwable $e) {
                     // Ein nicht erreichbares Zentralsystem ist keine Ausnahme,
                     // die der Aufrufer behandeln soll — es ist der Fall, fuer

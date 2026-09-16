@@ -47,7 +47,7 @@ it('verriegelt auch die Anhaengsel, nicht nur den Kontakt', function (): void {
 });
 
 it('laesst den Speicher selbst durch', function (): void {
-    $brain = (new FakeBrain)->answers('contacts.get', ['data' => [
+    $brain = (new FakeBrain)->answers('get', ['data' => [
         'id' => 5,
         'kind' => 'org',
         'formatted_name' => 'Darf',

@@ -41,7 +41,13 @@ return [
     | seiner eigenen Kontaktliste, und niemand merkt es. Zentrale Kontakte
     | liegen im Brain selbst, also werden sie aus dem Brain selbst gelesen.
     */
-    'brain_tool' => env('CONTACTS_BRAIN_TOOL', 'contacts-tool'),
+    'brain_tools' => [
+        'get' => env('CONTACTS_TOOL_GET', 'get-contact-tool'),
+        'find-by-email' => env('CONTACTS_TOOL_GET', 'get-contact-tool'),
+        'search' => env('CONTACTS_TOOL_SEARCH', 'search-contacts-tool'),
+        'upsert' => env('CONTACTS_TOOL_UPSERT', 'upsert-contact-tool'),
+        'merge' => env('CONTACTS_TOOL_MERGE', 'merge-contacts-tool'),
+    ],
 
     /*
     |--------------------------------------------------------------------------

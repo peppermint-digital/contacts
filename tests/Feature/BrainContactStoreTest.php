@@ -27,7 +27,7 @@ function kontaktAusDemBrain(array $overrides = []): array
 }
 
 it('spiegelt einen gelesenen Kontakt in die lokalen Tabellen', function (): void {
-    $brain = (new FakeBrain)->answers('contacts.get', ['data' => kontaktAusDemBrain()]);
+    $brain = (new FakeBrain)->answers('get', ['data' => kontaktAusDemBrain()]);
 
     $contact = $brain->store()->find(77);
 
@@ -42,7 +42,7 @@ it('spiegelt einen gelesenen Kontakt in die lokalen Tabellen', function (): void
 });
 
 it('liest bei Ausfall weiter — aus dem Spiegel', function (): void {
-    $brain = (new FakeBrain)->answers('contacts.get', ['data' => kontaktAusDemBrain()]);
+    $brain = (new FakeBrain)->answers('get', ['data' => kontaktAusDemBrain()]);
 
     // Einmal im guten Zustand lesen, damit es etwas zu spiegeln gibt.
     $brain->store()->find(77);
@@ -70,7 +70,7 @@ it('lehnt das Schreiben bei Ausfall ab — mit Grund, nicht stumm', function ():
 });
 
 it('nennt den Grund, warum gerade nicht geschrieben werden kann', function (): void {
-    $brain = (new FakeBrain)->answers('contacts.get', ['data' => kontaktAusDemBrain()]);
+    $brain = (new FakeBrain)->answers('get', ['data' => kontaktAusDemBrain()]);
     $store = $brain->store();
 
     $store->find(77);
@@ -84,7 +84,7 @@ it('nennt den Grund, warum gerade nicht geschrieben werden kann', function (): v
 });
 
 it('ueberschreibt den Spiegel NICHT mit einem Fehlschlag', function (): void {
-    $brain = (new FakeBrain)->answers('contacts.get', ['data' => kontaktAusDemBrain()]);
+    $brain = (new FakeBrain)->answers('get', ['data' => kontaktAusDemBrain()]);
     $brain->store()->find(77);
 
     $brain->goesDown();
@@ -103,7 +103,7 @@ it('ueberschreibt den Spiegel NICHT mit einem Fehlschlag', function (): void {
 });
 
 it('sagt Absage bei gleichzeitiger Aenderung — und haengt den fremden Stand an', function (): void {
-    $brain = (new FakeBrain)->answers('contacts.upsert', [
+    $brain = (new FakeBrain)->answers('upsert', [
         'conflict' => true,
         'current' => kontaktAusDemBrain(['formatted_name' => 'Beispiel GmbH & Co. KG', 'version' => 4]),
     ]);
@@ -128,7 +128,7 @@ it('sagt Absage bei gleichzeitiger Aenderung — und haengt den fremden Stand an
 
 it('spiegelt den neuen Stand, wenn das Schreiben durchgeht', function (): void {
     $brain = (new FakeBrain)->answers(
-        'contacts.upsert',
+        'upsert',
         fn (array $args): array => ['data' => kontaktAusDemBrain([
             'formatted_name' => $args['formatted_name'],
             'version' => 4,
@@ -143,11 +143,11 @@ it('spiegelt den neuen Stand, wenn das Schreiben durchgeht', function (): void {
 });
 
 it('ersetzt beim Spiegeln die Anhaengsel, statt sie anzusammeln', function (): void {
-    $brain = (new FakeBrain)->answers('contacts.get', ['data' => kontaktAusDemBrain()]);
+    $brain = (new FakeBrain)->answers('get', ['data' => kontaktAusDemBrain()]);
     $brain->store()->find(77);
 
     // Zentral wird eine Adresse entfernt und eine andere gesetzt.
-    $brain->answers('contacts.get', ['data' => kontaktAusDemBrain([
+    $brain->answers('get', ['data' => kontaktAusDemBrain([
         'emails' => [['value' => 'neu@beispiel.de']],
         'addresses' => [],
     ])]);
@@ -162,11 +162,11 @@ it('ersetzt beim Spiegeln die Anhaengsel, statt sie anzusammeln', function (): v
 });
 
 it('holt einen zentral geloeschten Kontakt NICHT aus dem Spiegel zurueck', function (): void {
-    $brain = (new FakeBrain)->answers('contacts.get', ['data' => kontaktAusDemBrain()]);
+    $brain = (new FakeBrain)->answers('get', ['data' => kontaktAusDemBrain()]);
     $brain->store()->find(77);
 
     // Zentral gibt es ihn nicht mehr. Das ist eine Antwort, kein Ausfall.
-    $brain->answers('contacts.get', ['data' => null]);
+    $brain->answers('get', ['data' => null]);
 
     expect($brain->store()->find(77))->toBeNull();
 });
@@ -175,7 +175,7 @@ it('spiegelt auch einen Kontakt, der nur eine Adresse hat', function (): void {
     // Der Fall aus dem Postfach. Die Ring-1-Pruefung laeuft beim Speichern,
     // die Adressen entstehen erst danach — ohne Vormerken scheitert
     // ausgerechnet der Fall, fuer den die Regel „Name ODER E-Mail" gemacht ist.
-    $brain = (new FakeBrain)->answers('contacts.get', ['data' => [
+    $brain = (new FakeBrain)->answers('get', ['data' => [
         'id' => 91,
         'kind' => 'individual',
         'formatted_name' => null,
@@ -187,4 +187,26 @@ it('spiegelt auch einen Kontakt, der nur eine Adresse hat', function (): void {
     expect($contact)->not->toBeNull()
         ->and($contact->formatted_name)->toBeNull()
         ->and($contact->emails->first()->value)->toBe('unbekannt@beispiel.de');
+});
+
+it('loescht beim Spiegeln nichts, was die Antwort gar nicht mitbringt', function (): void {
+    $brain = (new FakeBrain)->answers('get', ['data' => kontaktAusDemBrain()]);
+    $brain->store()->find(77);
+
+    // Eine Trefferliste liefert die Kurzform: Name, Organisation, sonst
+    // nichts. Wuerde der Spiegel daraus „keine Adressen" ableiten, wischte
+    // jede Suche die Anschriften aller Treffer aus der lokalen Kopie — und
+    // bei Ausfall stuenden die Kontakte ohne Anschrift da.
+    $brain->answers('search', ['data' => [[
+        'id' => 77,
+        'kind' => 'org',
+        'formatted_name' => 'Beispiel GmbH',
+    ]]]);
+
+    $brain->store()->search('Beispiel');
+
+    $gespiegelt = Contact::query()->find(77);
+
+    expect($gespiegelt->emails)->toHaveCount(1)
+        ->and($gespiegelt->addresses)->toHaveCount(1);
 });

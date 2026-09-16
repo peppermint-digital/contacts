@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Peppermint\Contacts\Contacts\AddressType;
 use Peppermint\Contacts\Contacts\Kind;
 use Peppermint\Contacts\Database\Factories\ContactFactory;
@@ -82,6 +83,37 @@ class Contact extends Model
             }
         });
 
+        // Der Versionsstempel steigt bei jeder Aenderung — im Modell und
+        // nicht im Speicher.
+        //
+        // Sonst gilt er nur fuer den Weg, an den man gedacht hat: Ein
+        // direktes `$contact->update([...])` im Brain liesse ihn stehen, und
+        // ein Produkt mit dem alten Stand duerfte anschliessend
+        // ueberschreiben, ohne dass die Pruefung anschlaegt. Der Stempel
+        // waere dann genau dort blind, wo er gebraucht wird.
+        //
+        // Ausnahme: Wer `version` selbst mitschickt, meint ihn — das ist der
+        // Spiegel, der den zentralen Stand uebernimmt und nicht erhoehen darf.
+        static::saving(function (self $contact): void {
+            if (! $contact->hasVersionColumn()) {
+                return;
+            }
+
+            if (! $contact->exists) {
+                // Beim Anlegen Stand 1 — am Objekt und nicht bloss als
+                // Spaltenvorgabe. Sonst liest der Aufrufer `null` zurueck
+                // und schickt beim naechsten Schreiben „keinen Stand" mit,
+                // womit die Absage-Pruefung stillschweigend aussetzt.
+                $contact->version ??= 1;
+
+                return;
+            }
+
+            if ($contact->isDirty() && ! $contact->isDirty('version')) {
+                $contact->version = ((int) ($contact->version ?? 0)) + 1;
+            }
+        });
+
         static::saved(function (self $contact): void {
             $contact->flushStagedEmails();
         });
@@ -102,6 +134,35 @@ class Contact extends Model
     public function getTable(): string
     {
         return config('contacts.tables.contacts', 'contacts');
+    }
+
+    /**
+     * Fuehrt die Tabelle dieses Produkts ueberhaupt einen Versionsstempel?
+     *
+     * Eine adoptierte Tabelle bringt ihn nicht mit — `customers` in der
+     * Verwaltung gibt es seit Jahren und kennt keine `version`. Ohne diese
+     * Frage waere jeder Kontakt dort unspeicherbar.
+     *
+     * ## Was das bedeutet, und warum es nicht still bleiben darf
+     *
+     * Fehlt die Spalte, greift die Absage bei gleichzeitiger Aenderung in
+     * diesem Produkt NICHT — dort gewinnt wieder der Letzte. Das ist beim
+     * Anschliessen eines gewachsenen Produkts zu entscheiden, nicht
+     * nebenbei: Entweder die Spalte kommt dazu, oder man nimmt bewusst in
+     * Kauf, dass zwei gleichzeitige Aenderungen sich ueberschreiben.
+     *
+     * Gemerkt je Tabelle, damit nicht jeder Schreibvorgang das Schema
+     * befragt. Kommt die Spalte spaeter dazu, greift sie nach einem Neustart.
+     *
+     * @var array<string, bool>
+     */
+    private static array $versionColumnByTable = [];
+
+    public function hasVersionColumn(): bool
+    {
+        $tabelle = $this->getTable();
+
+        return self::$versionColumnByTable[$tabelle] ??= Schema::hasColumn($tabelle, static::column('version'));
     }
 
     /**

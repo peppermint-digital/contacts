@@ -150,6 +150,21 @@ Die Profiltabellen trägt jedes Produkt selbst ein:
 ],
 ```
 
+## Der Versionsstempel
+
+`version` steigt bei **jeder** Änderung — im Modell, nicht im Speicher. Sonst gälte er nur
+für den Schreibweg, an den man gedacht hat: Ein direktes `$contact->update([...])` ließe
+ihn stehen, und ein Produkt mit dem alten Stand dürfte anschließend überschreiben, ohne
+dass die Prüfung anschlägt.
+
+Wer `version` selbst mitschickt, meint ihn — das ist der Spiegel, der den zentralen Stand
+übernimmt und nicht erhöhen darf.
+
+> **Beim Adoptieren aufpassen:** Eine gewachsene Tabelle bringt keine `version` mit.
+> Fehlt die Spalte, greift die Absage bei gleichzeitiger Änderung in diesem Produkt
+> **nicht** — dort gewinnt wieder der Letzte. Das ist beim Anschließen zu entscheiden,
+> nicht nebenbei: entweder die Spalte kommt dazu, oder man nimmt es bewusst in Kauf.
+
 ## Adoption ist Pflicht, kein Zusatz
 
 Ein Paket, das nur auf frischen Tabellen läuft, kann ein gewachsenes Produkt nicht

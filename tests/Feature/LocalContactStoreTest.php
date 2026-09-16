@@ -52,3 +52,28 @@ it('laesst sich die Version nicht von aussen vorschreiben', function (): void {
 
     expect($contact->version)->toBe(1);
 });
+
+it('zaehlt den Stand auch hoch, wenn jemand am Speicher vorbei aendert', function (): void {
+    // Der Stempel muss auf JEDEM Schreibweg steigen, nicht nur auf dem, an
+    // den man gedacht hat. Im Brain selbst wird direkt am Modell geaendert;
+    // bliebe er dort stehen, duerfte ein Produkt mit dem alten Stand
+    // anschliessend ueberschreiben, ohne dass die Pruefung anschlaegt — der
+    // Stempel waere genau dort blind, wo er gebraucht wird.
+    $contact = Contact::create(['formatted_name' => 'Anke Berg']);
+    expect($contact->version)->toBe(1);
+
+    $contact->update(['title' => 'Inhaberin']);
+    expect($contact->fresh()->version)->toBe(2);
+
+    $contact->update(['title' => 'Geschaeftsfuehrerin']);
+    expect($contact->fresh()->version)->toBe(3);
+});
+
+it('erhoeht den Stand nicht, wenn sich gar nichts geaendert hat', function (): void {
+    $contact = Contact::create(['formatted_name' => 'Anke Berg']);
+
+    $contact->save();
+    $contact->save();
+
+    expect($contact->fresh()->version)->toBe(1);
+});

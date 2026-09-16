@@ -106,7 +106,6 @@ class LocalContactStore implements ContactStore
             : new Contact;
 
         $contact->fill($attributes);
-        $contact->version = ($contact->version ?? 0) + 1;
         $contact->save();
 
         return $contact;

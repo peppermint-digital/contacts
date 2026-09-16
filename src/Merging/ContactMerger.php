@@ -72,7 +72,6 @@ class ContactMerger
 
             $from->delete();
 
-            $into->version = ($into->version ?? 0) + 1;
             $into->save();
 
             return $into->refresh();
