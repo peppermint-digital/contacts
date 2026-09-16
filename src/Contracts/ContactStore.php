@@ -3,6 +3,7 @@
 namespace Peppermint\Contacts\Contracts;
 
 use Illuminate\Support\Collection;
+use Peppermint\Contacts\Contacts\Kind;
 use Peppermint\Contacts\Exceptions\ProfileConflict;
 use Peppermint\Contacts\Exceptions\StaleContact;
 use Peppermint\Contacts\Exceptions\StoreUnavailable;
@@ -71,8 +72,15 @@ interface ContactStore
      * Die Frage, die heute niemand beantworten kann: Kommt eine Mail von
      * einem Kunden, findet der CRM-Aufloeser nichts, weil die Person dort
      * kein Kontakt ist.
+     *
+     * `$kind` ist kein Beiwerk. Bei kleinen Betrieben ist die Firmenadresse
+     * zugleich die der Ansprechpartnerin — `info@firma.de` haengt dann an
+     * BEIDEN Kontakten. Wer eine Person sucht und eine Organisation bekommt,
+     * verknuepft einen Menschen mit einer Firma, und es faellt niemandem auf,
+     * weil beides ein Kontakt ist. Genau so passiert beim Anschliessen des
+     * CRM, 16 Mal.
      */
-    public function findByEmail(string $email): ?Contact;
+    public function findByEmail(string $email, ?Kind $kind = null): ?Contact;
 
     /**
      * Suche ueber Namen, Organisation und Adressen.

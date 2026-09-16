@@ -5,6 +5,7 @@ namespace Peppermint\Contacts\Stores;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Peppermint\Contacts\Contacts\Kind;
 use Peppermint\Contacts\Contacts\StoreGuard;
 use Peppermint\Contacts\Contracts\ContactStore;
 use Peppermint\Contacts\Exceptions\BrainRejected;
@@ -87,12 +88,16 @@ class BrainContactStore implements ContactStore
         );
     }
 
-    public function findByEmail(string $email): ?Contact
+    public function findByEmail(string $email, ?Kind $kind = null): ?Contact
     {
         return $this->readOne(
-            fn (): ?array => $this->ask('find-by-email', ['email' => $email]),
+            fn (): ?array => $this->ask('find-by-email', array_filter([
+                'email' => $email,
+                'kind' => $kind?->value,
+            ])),
             fn (): ?Contact => Contact::query()
                 ->whereHas('emails', fn ($e) => $e->where('value', $email))
+                ->when($kind !== null, fn ($q) => $q->where('kind', $kind->value))
                 ->first(),
         );
     }

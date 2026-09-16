@@ -1,5 +1,6 @@
 <?php
 
+use Peppermint\Contacts\Contacts\Kind;
 use Peppermint\Contacts\Models\Contact;
 use Peppermint\Contacts\Stores\LocalContactStore;
 
@@ -147,4 +148,26 @@ it('beantwortet, wer fuer eine Organisation arbeitet', function (): void {
     expect($this->store->contactPersonsOf($firma->id)->pluck('formatted_name')->sort()->values()->all())
         ->toBe(['Anke Berg', 'Bernd Cordes'])
         ->and($this->store->contactPersonsOf(999999))->toHaveCount(0);
+});
+
+it('unterscheidet Person und Organisation bei derselben Adresse', function (): void {
+    // Bei kleinen Betrieben ist die Firmenadresse zugleich die der
+    // Ansprechpartnerin. Wer eine Person sucht und eine Organisation bekommt,
+    // verknuepft einen Menschen mit einer Firma — und es faellt niemandem
+    // auf, weil beides ein Kontakt ist.
+    $firma = $this->store->upsert([
+        'uid' => 'urn:test:firma', 'kind' => 'org', 'formatted_name' => 'Bothe Tanz GmbH',
+        'emails' => [['value' => 'ab@bothe-tanz.de']],
+    ]);
+    $this->store->upsert([
+        'uid' => 'urn:test:person', 'kind' => 'individual', 'formatted_name' => 'Anissa Bothe',
+        'emails' => [['value' => 'ab@bothe-tanz.de']], 'works_for' => $firma->id,
+    ]);
+
+    expect($this->store->findByEmail('ab@bothe-tanz.de', Kind::Individual)->formatted_name)
+        ->toBe('Anissa Bothe')
+        ->and($this->store->findByEmail('ab@bothe-tanz.de', Kind::Org)->formatted_name)
+        ->toBe('Bothe Tanz GmbH')
+        // Ohne Angabe bleibt es wie bisher: irgendeiner von beiden.
+        ->and($this->store->findByEmail('ab@bothe-tanz.de'))->not->toBeNull();
 });

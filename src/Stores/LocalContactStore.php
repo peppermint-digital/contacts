@@ -5,10 +5,10 @@ namespace Peppermint\Contacts\Stores;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Peppermint\Contacts\Contacts\Kind;
 use Peppermint\Contacts\Contracts\ContactStore;
 use Peppermint\Contacts\Merging\ContactMerger;
 use Peppermint\Contacts\Models\Contact;
-use Peppermint\Contacts\Models\ContactEmail;
 use Peppermint\Contacts\Models\ContactRelation;
 
 /**
@@ -76,13 +76,12 @@ class LocalContactStore implements ContactStore
         return Contact::query()->where('uid', $uid)->first();
     }
 
-    public function findByEmail(string $email): ?Contact
+    public function findByEmail(string $email, ?Kind $kind = null): ?Contact
     {
-        $treffer = ContactEmail::query()
-            ->where('value', $email)
+        return Contact::query()
+            ->whereHas('emails', fn ($e) => $e->where('value', $email))
+            ->when($kind !== null, fn ($q) => $q->where('kind', $kind->value))
             ->first();
-
-        return $treffer?->contact;
     }
 
     public function search(string $query, int $limit = 25): Collection
