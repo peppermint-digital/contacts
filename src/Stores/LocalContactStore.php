@@ -103,6 +103,26 @@ class LocalContactStore implements ContactStore
         $arbeitetFuer = $attributes['works_for'] ?? null;
         unset($attributes['works_for']);
 
+        // Die Anhaengsel sind Beziehungen, keine Spalten — sie duerfen nicht
+        // in `fill()` geraten.
+        //
+        // Das ist nicht nur Hygiene: Der zentrale Speicher reicht genau diese
+        // Schluessel an die Brain-Seite weiter, wo sie behandelt werden. Waere
+        // es hier anders, verhielten sich zwei Speicher bei identischer
+        // Eingabe verschieden — und ein Produkt, das von `local` auf `brain`
+        // umstellt, bekaeme ohne eine einzige Codeaenderung ein anderes
+        // Ergebnis.
+        //
+        // `null` heisst weiterhin „nicht angefasst", `[]` heisst „geleert".
+        $listen = [];
+
+        foreach (['emails', 'phones', 'addresses'] as $liste) {
+            if (array_key_exists($liste, $attributes)) {
+                $listen[$liste] = (array) $attributes[$liste];
+                unset($attributes[$liste]);
+            }
+        }
+
         // `version` ist hier reine Durchreiche: Ohne zweiten Schreiber gibt
         // es niemanden, gegen den sich ein Stand vergleichen liesse. Das Feld
         // wird trotzdem gepflegt, damit ein Produkt beim spaeteren Umstieg
@@ -114,7 +134,27 @@ class LocalContactStore implements ContactStore
             : new Contact;
 
         $contact->fill($attributes);
+
+        // Ein Kontakt, der nur ueber seine Adresse bekannt ist, muss die
+        // Ring-1-Pruefung bestehen — die laeuft beim Speichern, die Adressen
+        // entstehen danach.
+        if (! $contact->hasIdentifier()) {
+            foreach ($listen['emails'] ?? [] as $email) {
+                if (filled($email['value'] ?? null)) {
+                    $contact->withEmail($email['value'], $email['type'] ?? null, (bool) ($email['is_primary'] ?? false));
+                }
+            }
+        }
+
         $contact->save();
+
+        foreach ($listen as $liste => $zeilen) {
+            $contact->{$liste}()->delete();
+
+            foreach ($zeilen as $zeile) {
+                $contact->{$liste}()->create($zeile);
+            }
+        }
 
         if ($arbeitetFuer !== null && (int) $arbeitetFuer !== (int) $contact->getKey()) {
             ContactRelation::query()->firstOrCreate([
@@ -124,7 +164,7 @@ class LocalContactStore implements ContactStore
             ]);
         }
 
-        return $contact;
+        return $contact->refresh();
     }
 
     public function isWritable(): bool

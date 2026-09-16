@@ -102,3 +102,39 @@ it('legt dieselbe Beziehung bei einem zweiten Lauf nicht noch einmal an', functi
 
     expect($person->relations()->count())->toBe(1);
 });
+
+it('legt Adressen, Telefone und Anschriften mit an — wie der zentrale Speicher', function (): void {
+    // Verhielten sich die beiden Speicher hier verschieden, bekaeme ein
+    // Produkt beim Umstellen von `local` auf `brain` ohne eine einzige
+    // Codeaenderung ein anderes Ergebnis.
+    $contact = $this->store->upsert([
+        'uid' => 'urn:test:firma',
+        'kind' => 'org',
+        'formatted_name' => 'Bergbau GmbH',
+        'emails' => [['value' => 'info@bergbau.de', 'is_primary' => true]],
+        'phones' => [['value' => '+49 40 1']],
+        'addresses' => [['type' => 'billing', 'street' => 'Rechnungsweg 1']],
+    ]);
+
+    expect($contact->emails)->toHaveCount(1)
+        ->and($contact->phones)->toHaveCount(1)
+        ->and($contact->addresses)->toHaveCount(1)
+        ->and($contact->addressForDocument('invoice')->street)->toBe('Rechnungsweg 1');
+});
+
+it('unterscheidet auch hier weglassen von leeren', function (): void {
+    $this->store->upsert(['uid' => 'urn:test:x', 'formatted_name' => 'Anke Berg',
+        'emails' => [['value' => 'a@b.de']]]);
+
+    $ohne = $this->store->upsert(['uid' => 'urn:test:x', 'title' => 'Inhaberin']);
+    expect($ohne->emails)->toHaveCount(1);
+
+    $leer = $this->store->upsert(['uid' => 'urn:test:x', 'emails' => []]);
+    expect($leer->emails)->toHaveCount(0);
+});
+
+it('nimmt einen Kontakt, der nur ueber seine Adresse bekannt ist', function (): void {
+    $contact = $this->store->upsert(['uid' => 'urn:test:y', 'emails' => [['value' => 'nur@adresse.de']]]);
+
+    expect($contact->emails->first()->value)->toBe('nur@adresse.de');
+});
