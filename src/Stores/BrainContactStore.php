@@ -13,6 +13,7 @@ use Peppermint\Contacts\Exceptions\ProfileConflict;
 use Peppermint\Contacts\Exceptions\StaleContact;
 use Peppermint\Contacts\Exceptions\StoreUnavailable;
 use Peppermint\Contacts\Models\Contact;
+use Peppermint\Contacts\Models\ContactRelation;
 
 /**
  * Die Kontakte liegen zentral im AI Brain — lokal gespiegelt, und schreibend.
@@ -173,10 +174,13 @@ class BrainContactStore implements ContactStore
     /**
      * Die Ansprechpartner einer Organisation — direkt aus dem Brain.
      *
-     * NICHT aus dem Spiegel: Dort stehen die Beziehungen absichtlich nicht.
-     * Bei Ausfall gibt es hier deshalb eine leere Liste und keine halbe
-     * Wahrheit — wer damit entdoppelt, legt im Zweifel eine Dublette an,
-     * statt eine bestehende Person stillschweigend zu ueberschreiben.
+     * Bei Ausfall aus dem Spiegel — seit die Beziehungen mitgespiegelt
+     * werden, steht die Antwort dort. Genau dafuer gibt es ihn: Ein Produkt
+     * muss auch ohne Verbindung sagen koennen, wer fuer eine Firma arbeitet,
+     * sonst haelt es doch wieder eine eigene Tabelle daneben.
+     *
+     * Fuer das Entdoppeln beim Ueberfuehren ist das unkritisch: Dort wird
+     * geschrieben, und Schreiben verlangt ohnehin eine Verbindung.
      */
     public function contactPersonsOf(string|int $organisationId): Collection
     {
@@ -185,7 +189,9 @@ class BrainContactStore implements ContactStore
         if ($response === null) {
             $this->warnFallback('Ansprechpartner');
 
-            return collect();
+            $org = Contact::query()->find($organisationId);
+
+            return $org === null ? collect() : $org->contactPersons();
         }
 
         $row = $response['data'] ?? null;
@@ -311,6 +317,61 @@ class BrainContactStore implements ContactStore
     }
 
     /**
+     * Die Verbindung zur Organisation mit spiegeln — wenn es sie lokal gibt.
+     *
+     * ## Warum nur diese Richtung
+     *
+     * Gespiegelt wird `works_for`, also der Blick von der PERSON auf ihre
+     * Organisation. Der umgekehrte Blick („wer arbeitet hier?") entsteht
+     * daraus von selbst, sobald die Personen gespiegelt sind — er braucht
+     * keine eigene Zeile.
+     *
+     * Andersherum ginge es nicht: Beim Spiegeln einer Organisation sind ihre
+     * Ansprechpartner lokal noch nicht da, und eine Beziehung auf einen
+     * Kontakt, den es nicht gibt, ist entweder ein Fremdschluesselfehler oder
+     * eine Zeile, die auf nichts zeigt.
+     *
+     * ## Warum ueberhaupt
+     *
+     * Ohne diese Zeilen kann ein Produkt bei Ausfall nicht beantworten, wer
+     * fuer eine Firma arbeitet — und genau deshalb hielten die Produkte
+     * bisher ihre eigenen Ansprechpartner-Tabellen daneben. Der Spiegel muss
+     * die Frage beantworten koennen, sonst bleibt die Doppelung bestehen.
+     *
+     * @param  array<string, mixed>  $relations
+     */
+    private function spiegleBeziehungen(Contact $contact, array $relations): void
+    {
+        $organisationen = $relations['works_for'] ?? null;
+
+        // Nicht mitgeschickt heisst nicht geloescht — dieselbe Regel wie bei
+        // den Anhaengseln.
+        if (! is_array($organisationen)) {
+            return;
+        }
+
+        $vorhanden = collect($organisationen)
+            ->pluck('id')
+            ->filter()
+            ->filter(fn ($id): bool => Contact::query()->whereKey($id)->exists())
+            ->values();
+
+        ContactRelation::query()
+            ->where('contact_id', $contact->getKey())
+            ->where('type', ContactRelation::WorksFor)
+            ->whereNotIn('related_contact_id', $vorhanden->all())
+            ->delete();
+
+        foreach ($vorhanden as $id) {
+            ContactRelation::query()->firstOrCreate([
+                'contact_id' => $contact->getKey(),
+                'related_contact_id' => $id,
+                'type' => ContactRelation::WorksFor,
+            ]);
+        }
+    }
+
+    /**
      * Den zentralen Stand in die lokale Kopie schreiben.
      *
      * Wird ausschliesslich mit einer ERFOLGREICHEN Antwort aufgerufen — das
@@ -318,11 +379,8 @@ class BrainContactStore implements ContactStore
      * Aufrufbedingung statt als Pruefung, weil eine Pruefung auf „war das
      * ein Erfolg?" an dieser Stelle nicht mehr entscheidbar waere.
      *
-     * Beziehungen (`contact_relations`) bleiben bewusst aussen vor: Sie
-     * zeigen auf einen zweiten Kontakt, den es lokal noch nicht geben muss.
-     * Eine halb gespiegelte Beziehung waere schlimmer als keine — sie sähe
-     * vollstaendig aus. Das loest E3, wo die Brain-Seite festlegt, wie sie
-     * die Gegenseite mitliefert.
+     * Beziehungen werden mitgespiegelt — aber nur die, deren Gegenseite es
+     * lokal schon gibt. Siehe {@see spiegleBeziehungen()}.
      *
      * @param  array<string, mixed>  $row
      */
@@ -362,7 +420,9 @@ class BrainContactStore implements ContactStore
             ->except(['emails', 'phones', 'addresses', 'relations'])
             ->all();
 
-        return StoreGuard::bypass(fn (): Contact => DB::transaction(function () use ($id, $kern, $kinder): Contact {
+        $beziehungen = $row['relations'] ?? [];
+
+        return StoreGuard::bypass(fn (): Contact => DB::transaction(function () use ($id, $kern, $kinder, $beziehungen): Contact {
             $contact = Contact::query()->firstOrNew(['id' => $id]);
             $contact->forceFill($kern);
             $contact->mirrored_at = now();
@@ -396,6 +456,8 @@ class BrainContactStore implements ContactStore
                     $contact->{$beziehung}()->create($zeile);
                 }
             }
+
+            $this->spiegleBeziehungen($contact, $beziehungen);
 
             return $contact->refresh();
         }));

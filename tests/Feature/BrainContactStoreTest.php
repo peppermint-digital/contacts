@@ -237,10 +237,39 @@ it('holt die Ansprechpartner zentral, nicht aus dem Spiegel', function (): void 
     expect($brain->store()->contactPersonsOf(77)->pluck('formatted_name')->all())->toBe(['Anke Berg']);
 });
 
-it('gibt bei Ausfall eine leere Liste zurueck, statt eine halbe Wahrheit', function (): void {
-    // Wer damit entdoppelt, legt im Zweifel eine Dublette an — statt eine
-    // bestehende Person stillschweigend zu ueberschreiben.
-    $brain = (new FakeBrain)->goesDown();
+it('beantwortet bei Ausfall aus dem Spiegel, wer fuer die Firma arbeitet', function (): void {
+    // Genau dafuer gibt es den Spiegel. Kann ein Produkt das ohne Verbindung
+    // nicht beantworten, haelt es doch wieder seine eigene
+    // Ansprechpartner-Tabelle daneben — und die Doppelung bleibt.
+    $brain = (new FakeBrain)->answers('get', fn (array $a): array => match ((int) ($a['id'] ?? 0)) {
+        77 => ['data' => kontaktAusDemBrain()],
+        91 => ['data' => [
+            'id' => 91, 'kind' => 'individual', 'formatted_name' => 'Anke Berg',
+            'relations' => ['works_for' => [['id' => 77, 'name' => 'Beispiel GmbH']]],
+        ]],
+        default => ['data' => null],
+    });
 
-    expect($brain->store()->contactPersonsOf(77))->toHaveCount(0);
+    // Einmal im guten Zustand lesen, damit Firma UND Person gespiegelt sind.
+    $brain->store()->find(77);
+    $brain->store()->find(91);
+
+    $brain->goesDown();
+
+    expect($brain->store()->contactPersonsOf(77)->pluck('formatted_name')->all())
+        ->toBe(['Anke Berg']);
+});
+
+it('spiegelt keine Beziehung auf einen Kontakt, den es lokal nicht gibt', function (): void {
+    // Sonst zeigt die Zeile auf nichts — oder der Fremdschluessel wirft
+    // mitten im Spiegeln.
+    $brain = (new FakeBrain)->answers('get', ['data' => [
+        'id' => 91, 'kind' => 'individual', 'formatted_name' => 'Anke Berg',
+        'relations' => ['works_for' => [['id' => 999999, 'name' => 'Nie gespiegelt GmbH']]],
+    ]]);
+
+    $person = $brain->store()->find(91);
+
+    expect($person)->not->toBeNull()
+        ->and($person->relations()->count())->toBe(0);
 });
