@@ -226,3 +226,21 @@ it('reicht eine fachliche Absage des Brains durch, statt sie in „nicht erreich
         ->toThrow(fn (BrainRejected $e) => expect($e->getMessage())
             ->toContain('mindestens eine Kennung'));
 });
+
+it('holt die Ansprechpartner zentral, nicht aus dem Spiegel', function (): void {
+    $brain = (new FakeBrain)->answers('get', fn (array $a): array => match ((int) ($a['id'] ?? 0)) {
+        77 => ['data' => kontaktAusDemBrain(['relations' => ['contact_persons' => [['id' => 91, 'name' => 'Anke Berg']]]])],
+        91 => ['data' => ['id' => 91, 'kind' => 'individual', 'formatted_name' => 'Anke Berg']],
+        default => ['data' => null],
+    });
+
+    expect($brain->store()->contactPersonsOf(77)->pluck('formatted_name')->all())->toBe(['Anke Berg']);
+});
+
+it('gibt bei Ausfall eine leere Liste zurueck, statt eine halbe Wahrheit', function (): void {
+    // Wer damit entdoppelt, legt im Zweifel eine Dublette an — statt eine
+    // bestehende Person stillschweigend zu ueberschreiben.
+    $brain = (new FakeBrain)->goesDown();
+
+    expect($brain->store()->contactPersonsOf(77))->toHaveCount(0);
+});

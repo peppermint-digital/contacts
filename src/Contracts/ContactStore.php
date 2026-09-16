@@ -95,6 +95,20 @@ interface ContactStore
     public function upsert(array $attributes): Contact;
 
     /**
+     * Wer arbeitet fuer diese Organisation?
+     *
+     * Gehoert in den Vertrag und nicht in die Modelle, weil die Beziehungen
+     * bewusst NICHT gespiegelt werden: Sie zeigen auf einen zweiten Kontakt,
+     * den es lokal nicht geben muss, und eine halb gespiegelte Beziehung saehe
+     * vollstaendig aus. Wer die Frage trotzdem stellen will — etwa um beim
+     * Anschliessen eines zweiten Produkts keine Dublette anzulegen —, muss sie
+     * dort stellen koennen, wo die Antwort liegt.
+     *
+     * @return Collection<int, Contact>
+     */
+    public function contactPersonsOf(string|int $organisationId): Collection;
+
+    /**
      * Zwei Zeilen, die derselbe Mensch sind, zu einer machen.
      *
      * Pflichtfunktion, kein Zusatz: Dubletten entstehen unvermeidlich —

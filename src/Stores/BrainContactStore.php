@@ -166,6 +166,36 @@ class BrainContactStore implements ContactStore
     }
 
     /**
+     * Die Ansprechpartner einer Organisation — direkt aus dem Brain.
+     *
+     * NICHT aus dem Spiegel: Dort stehen die Beziehungen absichtlich nicht.
+     * Bei Ausfall gibt es hier deshalb eine leere Liste und keine halbe
+     * Wahrheit — wer damit entdoppelt, legt im Zweifel eine Dublette an,
+     * statt eine bestehende Person stillschweigend zu ueberschreiben.
+     */
+    public function contactPersonsOf(string|int $organisationId): Collection
+    {
+        $response = $this->ask('get', ['id' => $organisationId]);
+
+        if ($response === null) {
+            $this->warnFallback('Ansprechpartner');
+
+            return collect();
+        }
+
+        $row = $response['data'] ?? null;
+
+        if (! is_array($row)) {
+            return collect();
+        }
+
+        return collect($row['relations']['contact_persons'] ?? [])
+            ->map(fn (array $p): ?Contact => isset($p['id']) ? $this->find($p['id']) : null)
+            ->filter()
+            ->values();
+    }
+
+    /**
      * Zusammengefuehrt wird zentral.
      *
      * Nicht lokal und dann hochgeschickt: Das Zusammenfuehren loest eine

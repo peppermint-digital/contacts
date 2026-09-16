@@ -56,6 +56,13 @@ class LocalContactStore implements ContactStore
         return $spur === null ? null : Contact::query()->find($spur->into_id);
     }
 
+    public function contactPersonsOf(string|int $organisationId): Collection
+    {
+        $org = Contact::query()->find($organisationId);
+
+        return $org === null ? collect() : $org->contactPersons();
+    }
+
     public function merge(Contact|int $into, Contact|int $from): Contact
     {
         $ziel = $into instanceof Contact ? $into : Contact::query()->findOrFail($into);

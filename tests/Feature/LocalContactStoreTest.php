@@ -138,3 +138,13 @@ it('nimmt einen Kontakt, der nur ueber seine Adresse bekannt ist', function (): 
 
     expect($contact->emails->first()->value)->toBe('nur@adresse.de');
 });
+
+it('beantwortet, wer fuer eine Organisation arbeitet', function (): void {
+    $firma = Contact::factory()->organisation('Bergbau GmbH')->create();
+    $this->store->upsert(['uid' => 'u1', 'formatted_name' => 'Anke Berg', 'works_for' => $firma->id]);
+    $this->store->upsert(['uid' => 'u2', 'formatted_name' => 'Bernd Cordes', 'works_for' => $firma->id]);
+
+    expect($this->store->contactPersonsOf($firma->id)->pluck('formatted_name')->sort()->values()->all())
+        ->toBe(['Anke Berg', 'Bernd Cordes'])
+        ->and($this->store->contactPersonsOf(999999))->toHaveCount(0);
+});
