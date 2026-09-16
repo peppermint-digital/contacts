@@ -1,0 +1,43 @@
+{
+    "name": "peppermint/contacts",
+    "description": "Kontakte als geteiltes Paket — eine Zeile pro Mensch. Kern nach vCard (RFC 6350): Personen und Organisationen, mehrere Adressen, Telefone und E-Mails, und die Beziehung zwischen beiden.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "illuminate/database": "^11.0|^12.0|^13.0"
+    },
+    "suggest": {
+        "peppermint/ai-brain-bridge": "Kontakte zentral aus AI Brain lesen und schreiben statt lokal zu halten.",
+        "laravel/mcp": "Stellt die Kontakte als MCP-Werkzeuge bereit."
+    },
+    "autoload": {
+        "psr-4": {
+            "Peppermint\\Contacts\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Peppermint\\Contacts\\ContactsServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "require-dev": {
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^4.0"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Peppermint\\Contacts\\Tests\\": "tests/",
+            "Peppermint\\Contacts\\Database\\Factories\\": "database/factories/"
+        }
+    }
+}
