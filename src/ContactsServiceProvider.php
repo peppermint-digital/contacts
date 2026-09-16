@@ -2,13 +2,22 @@
 
 namespace Peppermint\Contacts;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
+use Peppermint\Contacts\Contracts\ContactStore;
+use Peppermint\Contacts\Stores\BrainContactStore;
+use Peppermint\Contacts\Stores\LocalContactStore;
 
 class ContactsServiceProvider extends ServiceProvider
 {
+    /** Diese Klasse gibt es nur, wenn ein brauchbarer zentraler Speicher installiert ist. */
+    private const BRIDGE = 'Peppermint\\AiBrainBridge\\Facades\\AiBrain';
+
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/contacts.php', 'contacts');
+
+        $this->app->singleton(ContactStore::class, fn (): ContactStore => $this->store());
     }
 
     public function boot(): void
@@ -22,5 +31,51 @@ class ContactsServiceProvider extends ServiceProvider
         if (config('contacts.run_migrations', true)) {
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         }
+    }
+
+    /**
+     * Den eingestellten Speicher bauen — oder laut auf den lokalen zurueckfallen.
+     *
+     * `store: brain` ohne die Bruecke ist eine Fehlkonfiguration, kein
+     * Randfall. Stillschweigend zurueckzufallen hiesse: Jemand haelt die
+     * Kontakte fuer zentral, waehrend sie lokal liegen — und pflegt ab da
+     * die falsche Kopie. Bei Kontakten waere das schlimmer als bei
+     * Postfaechern, weil hier geschrieben wird: Jede Aenderung landete in
+     * einer Zeile, die sonst niemand sieht.
+     */
+    private function store(): ContactStore
+    {
+        if (config('contacts.store', 'brain') !== 'brain') {
+            return new LocalContactStore;
+        }
+
+        if (! class_exists(self::BRIDGE)) {
+            Log::warning(
+                'contacts.store steht auf "brain", aber peppermint/ai-brain-bridge ist nicht installiert. '
+                .'Die Kontakte werden LOKAL gefuehrt — wer sie fuer zentral haelt, pflegt die falsche Kopie.'
+            );
+
+            return new LocalContactStore;
+        }
+
+        $bridge = self::BRIDGE;
+        $tool = (string) config('contacts.brain_tool', 'contacts-tool');
+
+        return new BrainContactStore(
+            function (string $capability, array $arguments) use ($bridge, $tool): ?array {
+                try {
+                    return $bridge::call($tool, ['capability' => $capability] + $arguments);
+                } catch (\Throwable $e) {
+                    // Ein nicht erreichbares Zentralsystem ist keine Ausnahme,
+                    // die der Aufrufer behandeln soll — es ist der Fall, fuer
+                    // den es den Spiegel gibt. `null` laesst den Speicher auf
+                    // den letzten guten Stand zurueckfallen.
+                    Log::warning('Kontakte konnten nicht aus AI Brain gelesen werden: '.$e->getMessage());
+
+                    return null;
+                }
+            },
+            (int) config('contacts.cache_ttl', 900),
+        );
     }
 }

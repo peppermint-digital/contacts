@@ -33,6 +33,34 @@ return [
     'cache_ttl' => (int) env('CONTACTS_CACHE_TTL', 900),
 
     /*
+    | Das Brain-Werkzeug, ueber das die Kontakte laufen.
+    |
+    | Bewusst der Werkzeug-Weg und NICHT der Faehigkeiten-Gateway: Der
+    | Gateway leitet an ein anderes PRODUKT weiter, und `contacts.search`
+    | gibt es dort womoeglich auch — dann antwortet das falsche System mit
+    | seiner eigenen Kontaktliste, und niemand merkt es. Zentrale Kontakte
+    | liegen im Brain selbst, also werden sie aus dem Brain selbst gelesen.
+    */
+    'brain_tool' => env('CONTACTS_BRAIN_TOOL', 'contacts-tool'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Riegel vor der lokalen Kopie
+    |--------------------------------------------------------------------------
+    |
+    | Steht `store` auf `brain`, sind die lokalen Tabellen ein Spiegel. Ein
+    | `Contact::create()` daneben legt eine Zeile an, die zentral niemand
+    | kennt: Sie sieht echt aus, taucht in der Suche auf, und beim naechsten
+    | Spiegeln ist sie weg — oder sie bleibt und ist die zweite Wahrheit.
+    |
+    | Deshalb wirft ein direkter Schreibzugriff, statt stillzuhalten.
+    | Abschaltbar fuer den Umstieg, wenn ein Produkt uebergangsweise noch
+    | beide Wege braucht.
+    |
+    */
+    'guard_direct_writes' => env('CONTACTS_GUARD_DIRECT_WRITES', true),
+
+    /*
     |--------------------------------------------------------------------------
     | Adoption — damit ein gewachsenes Produkt mitspielen kann
     |--------------------------------------------------------------------------

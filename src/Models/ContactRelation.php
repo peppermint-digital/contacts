@@ -4,6 +4,7 @@ namespace Peppermint\Contacts\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Peppermint\Contacts\Models\Concerns\GuardsDirectWrites;
 
 /**
  * Die Verbindung zwischen zwei Kontakten — vCard `RELATED`.
@@ -18,6 +19,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ContactRelation extends Model
 {
+    use GuardsDirectWrites;
+
     /** Die einzige Art, die das Paket selbst braucht. Weitere sind frei. */
     public const WorksFor = 'works_for';
 

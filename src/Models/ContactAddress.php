@@ -4,6 +4,7 @@ namespace Peppermint\Contacts\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Peppermint\Contacts\Models\Concerns\GuardsDirectWrites;
 
 /**
  * Eine Anschrift eines Kontakts — vCard `ADR`.
@@ -18,6 +19,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ContactAddress extends Model
 {
+    use GuardsDirectWrites;
+
     protected $guarded = [];
 
     protected function casts(): array

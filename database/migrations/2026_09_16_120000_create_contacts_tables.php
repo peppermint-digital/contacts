@@ -66,6 +66,20 @@ return new class extends Migration
             $table->date('birthday')->nullable();           // BDAY
             $table->text('note')->nullable();               // NOTE
 
+            // Der Versionsstempel. Er ist der Grund, warum zwei Produkte
+            // denselben Kontakt nicht gegenseitig ueberschreiben koennen:
+            // Wer schreibt, sagt, welchen Stand er gesehen hat. Passt der
+            // nicht mehr, gibt es eine Absage statt eines stillen
+            // Ueberschreibens — und niemand verliert, was er nicht gesehen
+            // hat.
+            $table->unsignedBigInteger('version')->default(1);
+
+            // Wann diese Zeile zuletzt vom zentralen Stand abgeschrieben
+            // wurde. Gesetzt heisst: Das hier ist eine KOPIE. Die Wahrheit
+            // liegt im Brain, und wer hier direkt hineinschreibt, baut die
+            // zweite Wahrheit, die das Paket verhindern soll.
+            $table->timestamp('mirrored_at')->nullable();
+
             $table->timestamps();
 
             // Gesucht wird nach Namen — in jedem Produkt, bei jeder

@@ -84,6 +84,41 @@ $contact->addressForDocument('invoice');        // Rechnungsadresse, sonst Haupt
 $contact->addressForDocument('delivery_note');  // Lieferadresse, sonst Hauptadresse
 ```
 
+## Der Speicher: zentral, lokal gespiegelt, schreibend
+
+```php
+$store = app(\Peppermint\Contacts\Contracts\ContactStore::class);
+
+$store->findByEmail('buchhaltung@beispiel.de');
+$store->search('Berg');
+$store->upsert(['uid' => '…', 'formatted_name' => 'Beispiel AG', 'version' => 3]);
+```
+
+**Der Spiegel ist keine Beschleunigung, sondern die Ausfallsicherung.** Am 15.09.2026 war
+die Brain-Verbindung über zwei Stunden tot. Läge alles zentral ohne Puffer, könnte die
+Verwaltung in so einer Lage keine Rechnung schreiben — die Anschrift fehlt.
+
+| Lage | Lesen | Schreiben |
+|---|---|---|
+| Brain erreichbar | zentral, Ergebnis wird gespiegelt | geht durch |
+| Brain weg | aus der lokalen Kopie | **`StoreUnavailable`** — sichtbar, nicht stumm |
+| Fremder Stand neuer | — | **`StaleContact`**, mit dem fremden Stand daran |
+
+**Nur Erfolg wird gespiegelt.** Ein Fehlschlag darf den letzten guten Stand nicht
+überschreiben, sonst wird aus einem kurzen Ausfall ein langer.
+
+Anders als beim Mail-Paket sind die lokalen Tabellen selbst der Spiegel, kein
+Cache-Eintrag: Eine Autovervollständigung, die pro Anschlag übers Netz geht, ist
+unbenutzbar. `mirrored_at` markiert eine Zeile als Kopie, und die Kopie übernimmt den
+Primärschlüssel des Brains — sonst hätte derselbe Kontakt zwei Nummern.
+
+### Der Riegel vor der Kopie
+
+Liegt der Bestand zentral, wirft ein `Contact::create()` daneben. Eine solche Zeile kennt
+zentral niemand: Sie sieht echt aus, taucht in der Suche auf, und beim nächsten Spiegeln
+ist sie weg — oder sie bleibt und ist die zweite Wahrheit, gegen die dieses Paket gebaut
+ist. Abschaltbar über `contacts.guard_direct_writes`, für Produkte im Umstieg.
+
 ## Adoption ist Pflicht, kein Zusatz
 
 Ein Paket, das nur auf frischen Tabellen läuft, kann ein gewachsenes Produkt nicht
@@ -115,8 +150,12 @@ ohne etwas zu messen.
 
 ## Stand
 
-Etappe **E1** (Gerüst und Kern). Es folgen: E2 Speicher-Vertrag, E3 Brain-Seite mit
-MCP-Werkzeugen, E4 erster Abnehmer (Verwaltung), E5 zweiter Abnehmer (CRM).
+Etappen **E1** (Gerüst und Kern) und **E2** (Speicher-Vertrag). Es folgen: E3 Brain-Seite
+mit MCP-Werkzeugen, E4 erster Abnehmer (Verwaltung), E5 zweiter Abnehmer (CRM).
+
+Das Übertragungsformat, an das sich die Brain-Seite in E3 halten muss, steht als Tabelle
+im Docblock von `Contracts\ContactStore` — damit beide Seiten gegen dieselbe Beschreibung
+gebaut werden statt gegeneinander.
 
 Prüffrage 3 des Paket-Vertrags — *schreibt jedes Produkt denselben Verdrahtungscode?* —
 wird bewusst erst beim **zweiten** Abnehmer beantwortet. Bei einer Installation gibt es

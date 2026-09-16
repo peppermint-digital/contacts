@@ -4,12 +4,15 @@ namespace Peppermint\Contacts\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Peppermint\Contacts\Models\Concerns\GuardsDirectWrites;
 
 /**
  * Eine Telefonnummer eines Kontakts — vCard `TEL`.
  */
 class ContactPhone extends Model
 {
+    use GuardsDirectWrites;
+
     protected $guarded = [];
 
     protected function casts(): array

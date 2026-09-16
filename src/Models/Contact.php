@@ -11,6 +11,7 @@ use Peppermint\Contacts\Contacts\AddressType;
 use Peppermint\Contacts\Contacts\Kind;
 use Peppermint\Contacts\Database\Factories\ContactFactory;
 use Peppermint\Contacts\Exceptions\IncompleteContact;
+use Peppermint\Contacts\Models\Concerns\GuardsDirectWrites;
 
 /**
  * Ein Kontakt — eine Zeile pro Mensch, und eine pro Firma.
@@ -41,6 +42,7 @@ use Peppermint\Contacts\Exceptions\IncompleteContact;
  */
 class Contact extends Model
 {
+    use GuardsDirectWrites;
     use HasFactory;
 
     protected $guarded = [];
@@ -92,6 +94,8 @@ class Contact extends Model
             // Mit Format, nicht ohne: Ein `date`-Cast ohne Format macht aus
             // einem gefüllten Datumsfeld je nach Treiber ein leeres.
             'birthday' => 'date:Y-m-d',
+            'version' => 'integer',
+            'mirrored_at' => 'datetime',
         ];
     }
 
