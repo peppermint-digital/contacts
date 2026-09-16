@@ -152,7 +152,20 @@ return new class extends Migration
             $table->string('type', 30)->default('works_for');
             $table->timestamps();
 
-            $table->unique(['contact_id', 'related_contact_id', 'type']);
+            // Indexname ausdruecklich und KURZ, nicht von Laravel abgeleitet.
+            //
+            // Abgeleitet hiesse hier
+            // `<tabelle>_contact_id_related_contact_id_type_unique` — beim
+            // Vorgabenamen `contact_relations` sind das 57 Zeichen und es
+            // passt knapp unter die 64, die MySQL fuer Bezeichner erlaubt.
+            // Jeder laengere abgebildete Tabellenname sprengt sie, und dann
+            // scheitert die Migration mitten im Lauf: Die Tabelle steht schon,
+            // der Index fehlt, und die Migration gilt als nicht ausgefuehrt.
+            //
+            // Genau so passiert beim Anschliessen des CRM, das seine Tabellen
+            // `zentrale_kontakt_beziehungen` nennt (70 Zeichen). Ein Fall, den
+            // nur ein Abnehmer MIT Tabellen-Abbildung zeigen kann.
+            $table->unique(['contact_id', 'related_contact_id', 'type'], 'kontakt_beziehung_eindeutig');
         });
     }
 

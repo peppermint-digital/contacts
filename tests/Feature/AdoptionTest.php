@@ -81,3 +81,22 @@ it('kommt ohne Versionsspalte aus, statt den Kontakt unspeicherbar zu machen', f
     expect($contact->hasVersionColumn())->toBeFalse()
         ->and($contact->fresh()->company_name)->toBe('Beispiel AG');
 });
+
+it('haelt alle Indexnamen unter der MySQL-Grenze, auch bei langen Tabellennamen', function (): void {
+    // MySQL erlaubt 64 Zeichen fuer Bezeichner; SQLite kennt keine Grenze und
+    // laesst das hier durchgehen. Der Test prueft deshalb die NAMEN, nicht die
+    // Ausfuehrung — sonst faende ihn wieder nur die Produktion.
+    $laengsteTabelle = 'zentrale_kontakt_zusammenfuehrungen';   // 35 Zeichen, wie im CRM
+
+    $abgeleitet = [
+        $laengsteTabelle.'_contact_id_foreign',
+        $laengsteTabelle.'_related_contact_id_foreign',
+        $laengsteTabelle.'_into_id_foreign',
+        $laengsteTabelle.'_contact_id_value_unique',
+        'kontakt_beziehung_eindeutig',
+    ];
+
+    foreach ($abgeleitet as $name) {
+        expect(strlen($name))->toBeLessThanOrEqual(64, "Bezeichner zu lang: {$name}");
+    }
+});
