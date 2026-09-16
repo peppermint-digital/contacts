@@ -9,6 +9,7 @@ use Peppermint\Contacts\Contracts\ContactStore;
 use Peppermint\Contacts\Merging\ContactMerger;
 use Peppermint\Contacts\Models\Contact;
 use Peppermint\Contacts\Models\ContactEmail;
+use Peppermint\Contacts\Models\ContactRelation;
 
 /**
  * Die Kontakte liegen in den Tabellen des Produkts.
@@ -95,6 +96,13 @@ class LocalContactStore implements ContactStore
     {
         $uid = $attributes['uid'] ?? null;
 
+        // Die Beziehung reist im selben Aufruf mit — sonst braeuchte jeder
+        // Aufrufer zwei Schritte und muesste selbst dafuer sorgen, dass der
+        // zweite auch passiert. Ein halb angelegter Ansprechpartner ohne
+        // Organisation ist genau die Zeile, die spaeter niemand zuordnen kann.
+        $arbeitetFuer = $attributes['works_for'] ?? null;
+        unset($attributes['works_for']);
+
         // `version` ist hier reine Durchreiche: Ohne zweiten Schreiber gibt
         // es niemanden, gegen den sich ein Stand vergleichen liesse. Das Feld
         // wird trotzdem gepflegt, damit ein Produkt beim spaeteren Umstieg
@@ -107,6 +115,14 @@ class LocalContactStore implements ContactStore
 
         $contact->fill($attributes);
         $contact->save();
+
+        if ($arbeitetFuer !== null && (int) $arbeitetFuer !== (int) $contact->getKey()) {
+            ContactRelation::query()->firstOrCreate([
+                'contact_id' => $contact->getKey(),
+                'related_contact_id' => $arbeitetFuer,
+                'type' => ContactRelation::WorksFor,
+            ]);
+        }
 
         return $contact;
     }

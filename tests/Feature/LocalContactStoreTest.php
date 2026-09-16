@@ -77,3 +77,28 @@ it('erhoeht den Stand nicht, wenn sich gar nichts geaendert hat', function (): v
 
     expect($contact->fresh()->version)->toBe(1);
 });
+
+it('legt die Beziehung zur Organisation im selben Aufruf mit an', function (): void {
+    // Sonst braeuchte jeder Aufrufer zwei Schritte — und ein halb angelegter
+    // Ansprechpartner ohne Organisation ist die Zeile, die spaeter niemand
+    // mehr zuordnen kann.
+    $firma = Contact::factory()->organisation('Bergbau GmbH')->create();
+
+    $person = $this->store->upsert([
+        'uid' => 'urn:test:person',
+        'formatted_name' => 'Anke Berg',
+        'works_for' => $firma->id,
+    ]);
+
+    expect($person->organizations()->pluck('formatted_name')->all())->toBe(['Bergbau GmbH']);
+});
+
+it('legt dieselbe Beziehung bei einem zweiten Lauf nicht noch einmal an', function (): void {
+    $firma = Contact::factory()->organisation()->create();
+    $daten = ['uid' => 'urn:test:person', 'formatted_name' => 'Anke Berg', 'works_for' => $firma->id];
+
+    $this->store->upsert($daten);
+    $person = $this->store->upsert($daten);
+
+    expect($person->relations()->count())->toBe(1);
+});
