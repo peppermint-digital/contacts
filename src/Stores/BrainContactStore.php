@@ -113,10 +113,24 @@ class BrainContactStore implements ContactStore
             return (new LocalContactStore)->search($query, $limit);
         }
 
-        return collect($response['data'] ?? [])
-            ->map(fn (array $row): ?Contact => $this->mirror($row))
-            ->filter()
-            ->values();
+        // Eloquent-Sammlung und nicht `collect()`: Nur sie kann `load()`.
+        $treffer = Contact::query()->newModelInstance()->newCollection(
+            collect($response['data'] ?? [])
+                ->map(fn (array $row): ?Contact => $this->mirror($row))
+                ->filter()
+                ->values()
+                ->all()
+        );
+
+        // Einmal nachladen statt je Treffer: Der Aufrufer braucht die Adressen
+        // (danach sucht er ja), und ohne diese Zeile wirft der Zugriff dort,
+        // wo Lazy Loading abgeschaltet ist.
+        //
+        // Auf der Sammlung und nicht ueber eine neue Abfrage: Die Reihenfolge
+        // kommt vom Brain und ist eine Aussage darueber, was am besten passt.
+        // Ein `whereKey(...)->get()` gaebe sie preis und lieferte die der
+        // Datenbank — bei Vorschlaegen ist die Reihenfolge der halbe Nutzen.
+        return $treffer->load(['emails', 'phones', 'addresses']);
     }
 
     public function upsert(array $attributes): Contact

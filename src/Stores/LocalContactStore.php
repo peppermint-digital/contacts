@@ -96,6 +96,11 @@ class LocalContactStore implements ContactStore
     public function search(string $query, int $limit = 25): Collection
     {
         return Contact::query()
+            // Mit den Anhaengseln: Ein Suchtreffer, dessen Adresse man erst
+            // nachladen muss, ist nur ein halber. Und wo ein Produkt Lazy
+            // Loading abgeschaltet hat — in diesem Haus die Regel — wirft das
+            // beim ersten Zugriff, statt still N+1 Abfragen zu machen.
+            ->with(['emails', 'phones', 'addresses'])
             ->where(fn ($q) => $q
                 ->where(Contact::column('formatted_name'), 'like', "%{$query}%")
                 ->orWhere(Contact::column('organization'), 'like', "%{$query}%")

@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Peppermint\Contacts\Contacts\Kind;
 use Peppermint\Contacts\Models\Contact;
 use Peppermint\Contacts\Models\ContactRelation;
@@ -224,5 +225,22 @@ it('aendert ueber die id, statt einen zweiten Kontakt anzulegen', function (): v
 
 it('meldet eine unbekannte id, statt sie zu erfinden', function (): void {
     expect(fn () => $this->store->upsert(['id' => 99999, 'formatted_name' => 'Geist']))
-        ->toThrow(Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        ->toThrow(ModelNotFoundException::class);
+});
+
+it('gibt Suchtreffer mit ihren Anhaengseln zurueck', function (): void {
+    $this->store->upsert([
+        'kind' => 'individual',
+        'formatted_name' => 'Anke Berg',
+        'emails' => [['value' => 'anke@bergbau.test', 'type' => 'work', 'is_primary' => true]],
+    ]);
+
+    $treffer = $this->store->search('Berg')->first();
+
+    // Ohne das muesste jeder Abnehmer nachladen — und wo Lazy Loading aus ist,
+    // wirft der Zugriff.
+    expect($treffer->relationLoaded('emails'))->toBeTrue()
+        ->and($treffer->relationLoaded('phones'))->toBeTrue()
+        ->and($treffer->relationLoaded('addresses'))->toBeTrue()
+        ->and($treffer->emails->first()->value)->toBe('anke@bergbau.test');
 });
