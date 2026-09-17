@@ -107,7 +107,8 @@ class LocalContactStore implements ContactStore
         // zweite auch passiert. Ein halb angelegter Ansprechpartner ohne
         // Organisation ist genau die Zeile, die spaeter niemand zuordnen kann.
         $arbeitetFuer = $attributes['works_for'] ?? null;
-        unset($attributes['works_for']);
+        $istHauptansprechpartner = (bool) ($attributes['is_primary_contact'] ?? false);
+        unset($attributes['works_for'], $attributes['is_primary_contact']);
 
         // Die Anhaengsel sind Beziehungen, keine Spalten — sie duerfen nicht
         // in `fill()` geraten.
@@ -163,11 +164,24 @@ class LocalContactStore implements ContactStore
         }
 
         if ($arbeitetFuer !== null && (int) $arbeitetFuer !== (int) $contact->getKey()) {
-            ContactRelation::query()->firstOrCreate([
+            $beziehung = ContactRelation::query()->firstOrCreate([
                 'contact_id' => $contact->getKey(),
                 'related_contact_id' => $arbeitetFuer,
                 'type' => ContactRelation::WorksFor,
             ]);
+
+            if ($istHauptansprechpartner) {
+                // Es gibt genau einen. Die anderen verlieren das Kennzeichen,
+                // sonst stuenden zwei „Hauptansprechpartner" nebeneinander und
+                // ein Beleg zoege den, der zufaellig zuerst kommt.
+                ContactRelation::query()
+                    ->where('related_contact_id', $arbeitetFuer)
+                    ->where('type', ContactRelation::WorksFor)
+                    ->whereKeyNot($beziehung->getKey())
+                    ->update(['is_primary' => false]);
+
+                $beziehung->update(['is_primary' => true]);
+            }
         }
 
         return $contact->refresh();

@@ -288,6 +288,9 @@ class Contact extends Model
     {
         return $this->inverseRelations()
             ->where('type', ContactRelation::WorksFor)
+            // Der Hauptansprechpartner zuerst — wer einen Beleg beschriftet,
+            // will nicht die Reihenfolge des Anlegens.
+            ->orderByDesc('is_primary')
             ->with('contact')
             ->get()
             ->pluck('contact')
@@ -305,6 +308,18 @@ class Contact extends Model
             ->pluck('related')
             ->filter()
             ->values();
+    }
+
+    /**
+     * Wer diese Organisation vertritt — oder null.
+     *
+     * „Hauptansprechpartner" haengt an der Verbindung, nicht am Menschen:
+     * Dieselbe Person kann bei einer Firma die erste Adresse sein und bei
+     * einer zweiten nur mitarbeiten.
+     */
+    public function primaryContactPerson(): ?self
+    {
+        return $this->contactPersons()->first();
     }
 
     public function primaryEmail(): ?ContactEmail

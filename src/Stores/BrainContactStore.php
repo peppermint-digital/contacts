@@ -362,12 +362,19 @@ class BrainContactStore implements ContactStore
             ->whereNotIn('related_contact_id', $vorhanden->all())
             ->delete();
 
-        foreach ($vorhanden as $id) {
-            ContactRelation::query()->firstOrCreate([
-                'contact_id' => $contact->getKey(),
-                'related_contact_id' => $id,
-                'type' => ContactRelation::WorksFor,
-            ]);
+        foreach ($organisationen as $organisation) {
+            if (! $vorhanden->contains($organisation['id'] ?? null)) {
+                continue;
+            }
+
+            ContactRelation::query()->updateOrCreate(
+                [
+                    'contact_id' => $contact->getKey(),
+                    'related_contact_id' => $organisation['id'],
+                    'type' => ContactRelation::WorksFor,
+                ],
+                ['is_primary' => (bool) ($organisation['is_primary'] ?? false)],
+            );
         }
     }
 

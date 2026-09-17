@@ -2,6 +2,7 @@
 
 use Peppermint\Contacts\Contacts\Kind;
 use Peppermint\Contacts\Models\Contact;
+use Peppermint\Contacts\Models\ContactRelation;
 use Peppermint\Contacts\Stores\LocalContactStore;
 
 beforeEach(function (): void {
@@ -170,4 +171,32 @@ it('unterscheidet Person und Organisation bei derselben Adresse', function (): v
         ->toBe('Bothe Tanz GmbH')
         // Ohne Angabe bleibt es wie bisher: irgendeiner von beiden.
         ->and($this->store->findByEmail('ab@bothe-tanz.de'))->not->toBeNull();
+});
+
+it('kennzeichnet den Hauptansprechpartner an der Beziehung', function (): void {
+    // „Hauptansprechpartner" haengt an der Verbindung, nicht am Menschen:
+    // Dieselbe Person kann bei einer Firma die erste Adresse sein und bei
+    // einer zweiten nur mitarbeiten.
+    $firma = Contact::factory()->organisation('Bergbau GmbH')->create();
+
+    $this->store->upsert(['uid' => 'u1', 'formatted_name' => 'Zuerst Angelegt', 'works_for' => $firma->id]);
+    $this->store->upsert([
+        'uid' => 'u2', 'formatted_name' => 'Anke Berg',
+        'works_for' => $firma->id, 'is_primary_contact' => true,
+    ]);
+
+    expect($firma->contactPersons()->first()->formatted_name)->toBe('Anke Berg')
+        ->and($firma->primaryContactPerson()->formatted_name)->toBe('Anke Berg');
+});
+
+it('laesst nur EINEN Hauptansprechpartner je Organisation zu', function (): void {
+    // Sonst stuenden zwei nebeneinander und ein Beleg zoege den, der
+    // zufaellig zuerst kommt.
+    $firma = Contact::factory()->organisation()->create();
+
+    $this->store->upsert(['uid' => 'u1', 'formatted_name' => 'Erste', 'works_for' => $firma->id, 'is_primary_contact' => true]);
+    $this->store->upsert(['uid' => 'u2', 'formatted_name' => 'Zweite', 'works_for' => $firma->id, 'is_primary_contact' => true]);
+
+    expect(ContactRelation::where('is_primary', true)->count())->toBe(1)
+        ->and($firma->primaryContactPerson()->formatted_name)->toBe('Zweite');
 });
