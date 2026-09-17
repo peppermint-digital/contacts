@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 import type { Contact } from './types'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -43,10 +45,20 @@ export function ContactList({
     contacts,
     labels,
     onEdit,
+    renderKind,
 }: {
     contacts: Contact[]
     labels: ContactListLabels
     onEdit?: (contact: Contact) => void
+    /**
+     * Ein Zeichen vor dem Namen, das Person von Organisation unterscheidet.
+     *
+     * Als Haken und nicht als eingebautes Symbol: Sonst erbte jedes Produkt
+     * die Icon-Bibliothek des Pakets — und zwar eine andere als die, die es
+     * ohnehin benutzt. Das Produkt reicht sein eigenes Zeichen herein, genau
+     * wie seine Woerter.
+     */
+    renderKind?: (kind: Contact['kind']) => ReactNode
 }) {
     if (contacts.length === 0) {
         return (
@@ -71,6 +83,9 @@ export function ContactList({
                 {contacts.map((kontakt) => (
                     <tr key={kontakt.id ?? kontakt.uid} className="border-b">
                         <td className="p-2 align-top">
+                            <div className="flex items-start gap-2">
+                                {renderKind?.(kontakt.kind)}
+                                <div>
                             <div className="font-medium">
                                 {kontakt.formatted_name ?? kontakt.organization ?? (
                                     <span className="text-muted-foreground italic">{labels.unnamed}</span>
@@ -85,6 +100,8 @@ export function ContactList({
                                     {(kontakt.relations?.works_for ?? []).map((o) => o.name).join(', ')}
                                 </div>
                             )}
+                                </div>
+                            </div>
                         </td>
 
                         <td className="p-2 align-top">

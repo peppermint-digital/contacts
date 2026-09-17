@@ -103,3 +103,34 @@ describe('ContactList', () => {
             .toBeNull()
     })
 })
+
+describe('ContactList — Zeichen fuer die Art', () => {
+    it('reicht die Art heraus, statt ein eigenes Symbol mitzubringen', () => {
+        // Sonst erbte jedes Produkt die Icon-Bibliothek des Pakets — und zwar
+        // eine andere als die, die es ohnehin benutzt.
+        const kontakte: Contact[] = [
+            { id: 1, kind: 'org', formatted_name: 'Beispiel GmbH' },
+            { id: 2, kind: 'individual', formatted_name: 'Anke Berg' },
+        ]
+
+        const { container } = render(
+            <ContactList
+                contacts={kontakte}
+                labels={labels}
+                renderKind={(art) => <span>{art === 'org' ? '[Firma]' : '[Person]'}</span>}
+            />,
+        )
+
+        // Ohne Leerzeichen: Das Zeichen und der Name sind Nachbarelemente,
+        // und `textOf` fasst nur Leerraum zusammen, es erfindet keinen.
+        expect(textOf(container)).toContain('[Firma]Beispiel GmbH')
+        expect(textOf(container)).toContain('[Person]Anke Berg')
+    })
+
+    it('kommt ohne das Zeichen aus', () => {
+        const kontakt: Contact = { id: 1, kind: 'org', formatted_name: 'Beispiel GmbH' }
+
+        expect(textOf(render(<ContactList contacts={[kontakt]} labels={labels} />).container))
+            .toContain('Beispiel GmbH')
+    })
+})
