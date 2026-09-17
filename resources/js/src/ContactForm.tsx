@@ -186,14 +186,20 @@ export function ContactForm({
 }
 
 /**
- * Eine Liste gleichartiger Zeilen.
+ * Eine Liste gleichartiger Zeilen — E-Mails, Telefonnummern, Anschriften.
+ *
+ * Nach außen gegeben, weil sie nicht nur in diesem Formular gebraucht wird:
+ * Die Kundenmaske der Verwaltung führt ihre Ansprechpartner als Zeilen INNEN
+ * in einem größeren Formular, nicht als eigenes. Ohne diesen Baustein baut
+ * sie sich ihre eigene Liste — und dann gibt es zwei, von denen nur eine
+ * gepflegt wird.
  *
  * Über `object` und nicht `Record<string, unknown>`: Ein Interface mit
  * bekannten Feldern erfüllt letzteres in TypeScript nicht von selbst, und
  * eine Index-Signatur am Kontakt-Typ hieße, dass jeder Tippfehler in einem
  * Feldnamen typgeprüfte Gültigkeit bekäme.
  */
-function Werteliste<T extends object>({
+export function Werteliste<T extends object>({
     titel,
     addRow,
     zeilen,

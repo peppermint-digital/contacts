@@ -2,4 +2,4 @@ export type { Contact, ContactAddress, ContactEmail, ContactKind, ContactPhone, 
 export { addressForDocument } from './addresses'
 export { httpContactSource, type ContactRoutes, type ContactSource, type SaveResult } from './httpSources'
 export { ContactList, type ContactListLabels } from './ContactList'
-export { ContactForm, type ContactFormLabels } from './ContactForm'
+export { ContactForm, Werteliste, type ContactFormLabels } from './ContactForm'
