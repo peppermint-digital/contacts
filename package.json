@@ -1,7 +1,7 @@
 {
     "name": "@peppermint-digital/contacts",
     "version": "0.1.0",
-    "description": "Kontakt-Kern zum PHP-Paket: die Typen nach vCard und die Regel, welche Anschrift auf welchen Beleg gehoert — ohne ein Wort Oberflaechentext.",
+    "description": "Kontakt-Kern zum PHP-Paket: die Typen nach vCard und die Regel, welche Anschrift auf welchen Beleg gehoert \u2014 ohne ein Wort Oberflaechentext.",
     "license": "MIT",
     "type": "module",
     "main": "./dist/index.js",
@@ -26,6 +26,19 @@
     "devDependencies": {
         "tsup": "^8.0.0",
         "typescript": "^5.4.0",
-        "vitest": "^5.0.0"
+        "vitest": "^5.0.0",
+        "@types/react": "^19.3.0",
+        "@types/react-dom": "^19.3.0",
+        "react": "^19.3.0",
+        "react-dom": "^19.3.0",
+        "jsdom": "^30.0.1"
+    },
+    "dependencies": {
+        "clsx": "^2.1.1",
+        "tailwind-merge": "^3.2.0"
+    },
+    "peerDependencies": {
+        "react": "^18 || ^19",
+        "react-dom": "^18 || ^19"
     }
 }

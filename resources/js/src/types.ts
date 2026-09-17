@@ -31,6 +31,12 @@ export interface ContactAddress {
     is_default?: boolean
 }
 
+/** Ein Kontakt in einer Verbindung — nur Nummer und Name, nicht der ganze Satz. */
+export interface RelatedContact {
+    id: number
+    name: string | null
+}
+
 export interface Contact {
     id?: number | string
     kind: ContactKind
@@ -43,7 +49,20 @@ export interface Contact {
     url?: string | null
     birthday?: string | null
     note?: string | null
+    version?: number | null
     emails?: ContactEmail[]
     phones?: ContactPhone[]
     addresses?: ContactAddress[]
+
+    /**
+     * Die Verbindungen — Spiegelbild von `ContactPayload::toArray()`.
+     *
+     * Hier lagen die Typen hinter der PHP-Nutzlast zurueck, bis die erste
+     * Komponente danach griff. Genau davor sollen sie schuetzen: Wer das
+     * Adressbuch ueber den Connector liest, hat nur sie als Beschreibung.
+     */
+    relations?: {
+        works_for?: RelatedContact[]
+        contact_persons?: RelatedContact[]
+    }
 }

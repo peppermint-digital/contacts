@@ -178,10 +178,31 @@ Ein Paket, das nur auf frischen Tabellen läuft, kann ein gewachsenes Produkt ni
 
 ## Die npm-Hälfte
 
-`@peppermint-digital/contacts` trägt die Typen und **dieselbe** Beleg-Adressregel in
-TypeScript. Das ist Absicht: Ein Abnehmer (der Shop) liest über den Connector und hat kein
-Laravel. Ohne diese Zeilen schriebe er die Regel selbst — leicht anders. Die Tests auf
-beiden Seiten prüfen dieselben Fälle.
+`@peppermint-digital/contacts` ist ein **eigener Install** — das Composer-Paket bringt
+keine Oberfläche mit.
+
+```tsx
+import { ContactList, ContactForm, httpContactSource } from '@peppermint-digital/contacts'
+```
+
+| Was | Woher |
+|---|---|
+| Anordnung und Verdrahtung | aus dem Paket |
+| Die Wörter | vom Produkt, über `labels` |
+| Die Adressen der Endpunkte | vom Produkt, über `ContactRoutes` |
+| Wohin gespeichert wird | vom Produkt — `onSave` reicht den Entwurf heraus |
+
+Damit ist dieselbe Liste in drei Produkten dieselbe Liste und unterscheidet sich in dem,
+worin sich Produkte wirklich unterscheiden. Ganze **Seiten** bleiben beim Produkt; teilbar
+ist die Anordnung, nicht der Seitenaufbau.
+
+Dazu trägt die npm-Hälfte die Typen und **dieselbe** Beleg-Adressregel in TypeScript. Das
+ist Absicht: Ein Abnehmer (der Shop) liest über den Connector und hat kein Laravel. Ohne
+diese Zeilen schriebe er die Regel selbst — leicht anders. Die Tests auf beiden Seiten
+prüfen dieselben Fälle.
+
+Die Primitiven (`Button`, `Input`, `Label`, `Badge`) sind bewusst ohne Radix gebaut: 89
+Zeilen statt 421 im Mail-Paket, gleiches Aussehen, weniger Abhängigkeiten im Produkt.
 
 ## Tests
 

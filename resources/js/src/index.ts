@@ -1,2 +1,5 @@
-export type { Contact, ContactAddress, ContactEmail, ContactKind, ContactPhone } from './types'
+export type { Contact, ContactAddress, ContactEmail, ContactKind, ContactPhone, RelatedContact } from './types'
 export { addressForDocument } from './addresses'
+export { httpContactSource, type ContactRoutes, type ContactSource, type SaveResult } from './httpSources'
+export { ContactList, type ContactListLabels } from './ContactList'
+export { ContactForm, type ContactFormLabels } from './ContactForm'
