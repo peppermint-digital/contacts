@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use Peppermint\Contacts\Console\SpiegelAuffrischen;
 use Peppermint\Contacts\Contracts\ContactStore;
+use Peppermint\Contacts\Listeners\KontaktAenderungSpiegeln;
 use Peppermint\Contacts\Stores\BrainContactStore;
 use Peppermint\Contacts\Stores\LocalContactStore;
 
@@ -36,6 +37,28 @@ class ContactsServiceProvider extends ServiceProvider
         if (config('contacts.run_migrations', true)) {
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         }
+
+        $this->hoereAufAenderungen();
+    }
+
+    /**
+     * Auf Meldungen aus dem Brain hören (#5815).
+     *
+     * Die Brücke bringt Route, Signaturprüfung und Deduplizierung schon mit
+     * und feuert ein gewöhnliches Laravel-Ereignis. Das Paket hängt sich nur
+     * daran — ein Produkt muss dafür nichts einrichten.
+     *
+     * Ohne Brücke gibt es nichts zu hören: Dann liegen die Kontakte lokal.
+     */
+    private function hoereAufAenderungen(): void
+    {
+        $ereignis = 'Peppermint\\AiBrainBridge\\Events\\AiBrainEventReceived';
+
+        if (! class_exists($ereignis)) {
+            return;
+        }
+
+        $this->app['events']->listen($ereignis, KontaktAenderungSpiegeln::class);
     }
 
     /**
