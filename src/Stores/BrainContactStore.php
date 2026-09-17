@@ -68,10 +68,7 @@ class BrainContactStore implements ContactStore
      *                                                                entschluesselte Antwort zurueck — oder `null`, wenn das Brain
      *                                                                nicht erreichbar war. `null` ist ein Zustand, kein Fehler.
      */
-    public function __construct(
-        private $call,
-        private readonly int $ttl = 900,
-    ) {}
+    public function __construct(private $call) {}
 
     public function find(string|int $id): ?Contact
     {

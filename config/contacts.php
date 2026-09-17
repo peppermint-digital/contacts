@@ -30,7 +30,20 @@ return [
     | letzten guten Stand ein, statt zu scheitern — und eine Rechnung lässt
     | sich weiter schreiben. Nur Erfolg wird gespiegelt.
     */
-    'cache_ttl' => (int) env('CONTACTS_CACHE_TTL', 900),
+    /*
+    | Es gibt bewusst KEINEN Lese-Cache.
+    |
+    | Bis zum 17.09.2026 stand hier `cache_ttl` — der Speicher nahm den Wert
+    | entgegen und benutzte ihn nirgends. Die Einstellung versprach also etwas,
+    | das sie nicht tat.
+    |
+    | Eingebaut wird sie auch nicht mehr: Seit #5815 meldet das Brain jede
+    | Aenderung, und das Produkt liest daraufhin zurueck. Ein Cache mit 15
+    | Minuten Haltbarkeit wuerde ausgerechnet diese Rueckfrage aus dem Speicher
+    | bedienen — die Meldung kaeme an, und gespiegelt wuerde der alte Stand.
+    | Ein Cache waere hier nicht Beschleunigung, sondern das Gegenteil der
+    | Frische, die der ganze Weg herstellen soll.
+    */
 
     /*
     | Das Brain-Werkzeug, ueber das die Kontakte laufen.

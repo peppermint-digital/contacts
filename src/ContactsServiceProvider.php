@@ -117,7 +117,6 @@ class ContactsServiceProvider extends ServiceProvider
                     return null;
                 }
             },
-            (int) config('contacts.cache_ttl', 900),
         );
     }
 }
