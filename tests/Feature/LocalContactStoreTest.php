@@ -212,3 +212,17 @@ it('loest die Verbindung, ohne den Menschen zu loeschen', function (): void {
     expect($firma->contactPersons())->toHaveCount(0)
         ->and(Contact::find($person->id))->not->toBeNull();
 });
+
+it('aendert ueber die id, statt einen zweiten Kontakt anzulegen', function (): void {
+    $kontakt = $this->store->upsert(['kind' => 'org', 'formatted_name' => 'Neu GmbH', 'addresses' => [['city' => 'Kiel']]]);
+
+    $this->store->upsert(['id' => $kontakt->id, 'kind' => 'org', 'formatted_name' => 'Neu GmbH', 'addresses' => [['city' => 'Flensburg']]]);
+
+    expect(Contact::count())->toBe(1)
+        ->and($kontakt->fresh()->addresses->first()->city)->toBe('Flensburg');
+});
+
+it('meldet eine unbekannte id, statt sie zu erfinden', function (): void {
+    expect(fn () => $this->store->upsert(['id' => 99999, 'formatted_name' => 'Geist']))
+        ->toThrow(Illuminate\Database\Eloquent\ModelNotFoundException::class);
+});

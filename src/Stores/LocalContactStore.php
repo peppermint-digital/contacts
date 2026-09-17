@@ -145,9 +145,19 @@ class LocalContactStore implements ContactStore
         // auf `brain` nicht ploetzlich ohne Staende dasteht.
         unset($attributes['version']);
 
-        $contact = $uid !== null
-            ? Contact::query()->firstOrNew(['uid' => $uid])
-            : new Contact;
+        // Dieselbe Rangfolge wie auf der Brain-Seite: `id` schlaegt `uid`,
+        // eine unbekannte `id` ist ein Fehler, eine unbekannte `uid` nicht.
+        // Bis zum 17.09.2026 wurde `id` hier gar nicht beachtet — sie landete
+        // ueber `fill()` auf einem NEUEN Datensatz, und ein Aendern legte
+        // still einen zweiten Kontakt an (bzw. lief in den Schluesselkonflikt).
+        $id = $attributes['id'] ?? null;
+        unset($attributes['id']);
+
+        $contact = match (true) {
+            filled($id) => Contact::query()->findOrFail($id),
+            $uid !== null => Contact::query()->firstOrNew(['uid' => $uid]),
+            default => new Contact,
+        };
 
         $contact->fill($attributes);
 
