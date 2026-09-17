@@ -200,3 +200,15 @@ it('laesst nur EINEN Hauptansprechpartner je Organisation zu', function (): void
     expect(ContactRelation::where('is_primary', true)->count())->toBe(1)
         ->and($firma->primaryContactPerson()->formatted_name)->toBe('Zweite');
 });
+
+it('loest die Verbindung, ohne den Menschen zu loeschen', function (): void {
+    // Ein Mensch kann bei mehreren Organisationen haengen; wer ihn beim einen
+    // entfernt, naehme ihn womoeglich einem anderen Produkt weg.
+    $firma = Contact::factory()->organisation('Bergbau GmbH')->create();
+    $person = $this->store->upsert(['uid' => 'u1', 'formatted_name' => 'Anke Berg', 'works_for' => $firma->id]);
+
+    $this->store->unlinkFrom($person->id, $firma->id);
+
+    expect($firma->contactPersons())->toHaveCount(0)
+        ->and(Contact::find($person->id))->not->toBeNull();
+});

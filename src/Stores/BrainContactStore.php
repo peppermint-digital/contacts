@@ -206,6 +206,30 @@ class BrainContactStore implements ContactStore
             ->values();
     }
 
+    public function unlinkFrom(string|int $contactId, string|int $organisationId): void
+    {
+        $response = $this->ask('unlink', [
+            'contact_id' => $contactId,
+            'organisation_id' => $organisationId,
+        ]);
+
+        if ($response === null) {
+            throw StoreUnavailable::forWrite();
+        }
+
+        $this->pruefeAntwort($response);
+
+        // Auch im Spiegel loesen, damit die Oberflaeche nicht bis zum
+        // naechsten Auffrischen etwas zeigt, das zentral nicht mehr gilt.
+        StoreGuard::bypass(function () use ($contactId, $organisationId): void {
+            ContactRelation::query()
+                ->where('contact_id', $contactId)
+                ->where('related_contact_id', $organisationId)
+                ->where('type', ContactRelation::WorksFor)
+                ->delete();
+        });
+    }
+
     /**
      * Zusammengefuehrt wird zentral.
      *

@@ -63,6 +63,15 @@ class LocalContactStore implements ContactStore
         return $org === null ? collect() : $org->contactPersons();
     }
 
+    public function unlinkFrom(string|int $contactId, string|int $organisationId): void
+    {
+        ContactRelation::query()
+            ->where('contact_id', $contactId)
+            ->where('related_contact_id', $organisationId)
+            ->where('type', ContactRelation::WorksFor)
+            ->delete();
+    }
+
     public function merge(Contact|int $into, Contact|int $from): Contact
     {
         $ziel = $into instanceof Contact ? $into : Contact::query()->findOrFail($into);

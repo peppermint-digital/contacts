@@ -1,6 +1,6 @@
 {
     "name": "@peppermint-digital/contacts",
-    "version": "0.14.0",
+    "version": "0.15.0",
     "description": "Kontakt-Kern zum PHP-Paket: die Typen nach vCard und die Regel, welche Anschrift auf welchen Beleg gehoert \u2014 ohne ein Wort Oberflaechentext.",
     "license": "MIT",
     "type": "module",

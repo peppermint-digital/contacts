@@ -117,6 +117,23 @@ interface ContactStore
     public function contactPersonsOf(string|int $organisationId): Collection;
 
     /**
+     * Die Verbindung zwischen einem Menschen und einer Organisation loesen.
+     *
+     * Bewusst nicht „den Kontakt loeschen": Ein Mensch kann bei mehreren
+     * Organisationen haengen, und wer ihn beim einen entfernt, naehme ihn
+     * womoeglich einem anderen Produkt weg. Der Kontakt bleibt; nur die
+     * Zugehoerigkeit endet.
+     *
+     * Muss ueber den Speicher laufen und nicht per direktem Loeschen: Eine
+     * lokal entfernte Beziehung stuende zentral weiter, und beim naechsten
+     * Auffrischen waere sie zurueck — es sähe aus, als haette das Loeschen
+     * nicht funktioniert.
+     *
+     * @throws StoreUnavailable
+     */
+    public function unlinkFrom(string|int $contactId, string|int $organisationId): void;
+
+    /**
      * Zwei Zeilen, die derselbe Mensch sind, zu einer machen.
      *
      * Pflichtfunktion, kein Zusatz: Dubletten entstehen unvermeidlich —

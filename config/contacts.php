@@ -47,6 +47,7 @@ return [
         'search' => env('CONTACTS_TOOL_SEARCH', 'search-contacts-tool'),
         'upsert' => env('CONTACTS_TOOL_UPSERT', 'upsert-contact-tool'),
         'merge' => env('CONTACTS_TOOL_MERGE', 'merge-contacts-tool'),
+        'unlink' => env('CONTACTS_TOOL_UNLINK', 'unlink-contact-tool'),
     ],
 
     /*
