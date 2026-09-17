@@ -4,6 +4,7 @@ namespace Peppermint\Contacts;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
+use Peppermint\Contacts\Console\SpiegelAuffrischen;
 use Peppermint\Contacts\Contracts\ContactStore;
 use Peppermint\Contacts\Stores\BrainContactStore;
 use Peppermint\Contacts\Stores\LocalContactStore;
@@ -28,6 +29,10 @@ class ContactsServiceProvider extends ServiceProvider
 
         // Ein gewachsenes Produkt schaltet das ab und bildet stattdessen
         // seine vorhandenen Tabellen ab.
+        if ($this->app->runningInConsole()) {
+            $this->commands([SpiegelAuffrischen::class]);
+        }
+
         if (config('contacts.run_migrations', true)) {
             $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         }
