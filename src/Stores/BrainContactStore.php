@@ -482,8 +482,10 @@ class BrainContactStore implements ContactStore
             // Arbeit, die gleich darauf wieder ueberschrieben wird.
             if (! $contact->hasIdentifier()) {
                 foreach ($kinder['emails'] ?? [] as $email) {
-                    if (isset($email['value'])) {
-                        $contact->withEmail($email['value']);
+                    $wert = $this->zeileNormieren($email)['value'] ?? null;
+
+                    if ($wert !== null) {
+                        $contact->withEmail($wert);
                     }
                 }
             }
@@ -498,7 +500,7 @@ class BrainContactStore implements ContactStore
                 $contact->{$beziehung}()->delete();
 
                 foreach ($zeilen as $zeile) {
-                    $contact->{$beziehung}()->create($zeile);
+                    $contact->{$beziehung}()->create($this->zeileNormieren($zeile));
                 }
             }
 
@@ -506,5 +508,26 @@ class BrainContactStore implements ContactStore
 
             return $contact->refresh();
         }));
+    }
+
+    /**
+     * Eine Anhaengsel-Zeile, wie sie auch immer geliefert wurde.
+     *
+     * Die Kurzfassung der Suche gab `emails` als blosse Adressen zurueck
+     * (`["a@b.test"]`), die Einzelabfrage als Zeilen (`[{"value": …}]`) —
+     * derselbe Schluessel mit zwei Bedeutungen, je nach Endpunkt. Seit
+     * v0.18.0 sendet die Brain-Seite beides gleich.
+     *
+     * Die Duldung bleibt trotzdem, und zwar mit Absender: Waehrend eines
+     * Rollouts steht ein Produkt mit neuem Paket vor einem Brain mit altem
+     * Stand. Ein Spiegel, der daran zerbricht, macht aus einer
+     * Versionsdifferenz einen Ausfall.
+     *
+     * @param  array<string, mixed>|string  $zeile
+     * @return array<string, mixed>
+     */
+    private function zeileNormieren(array|string $zeile): array
+    {
+        return is_string($zeile) ? ['value' => $zeile] : $zeile;
     }
 }

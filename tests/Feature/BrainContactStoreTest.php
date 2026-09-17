@@ -273,3 +273,18 @@ it('spiegelt keine Beziehung auf einen Kontakt, den es lokal nicht gibt', functi
     expect($person)->not->toBeNull()
         ->and($person->relations()->count())->toBe(0);
 });
+
+it('spiegelt auch die Kurzfassung, in der Adressen blosse Zeichenketten sind', function (): void {
+    // So antwortete `search-contacts-tool` bis v0.18.0 — und so antwortet ein
+    // Brain, das waehrend eines Rollouts noch nicht nachgezogen ist.
+    $brain = (new FakeBrain)->answers('search', ['data' => [[
+        'id' => 7,
+        'kind' => 'individual',
+        'formatted_name' => 'Anke Berg',
+        'emails' => ['anke@bergbau.test'],
+    ]]]);
+
+    $treffer = $brain->store()->search('Berg')->first();
+
+    expect($treffer->emails->first()->value)->toBe('anke@bergbau.test');
+});
