@@ -63,3 +63,26 @@ it('haelt still, wenn der Bestand hier lokal liegt', function (): void {
         ->expectsOutputToContain('lokal')
         ->assertSuccessful();
 });
+
+it('holt die Ansprechpartner einer Organisation mit', function (): void {
+    // Ein Produkt spiegelt sonst nur, was es selbst gelesen hat. Eine Person,
+    // die ANDERSWO an diese Organisation gehaengt wurde — beim
+    // Zusammenfuehren, aus einem anderen Produkt —, taucht hier nie auf.
+    Contact::query()->forceCreate(['id' => 41, 'kind' => 'org', 'formatted_name' => 'Wildpark Mueden GmbH']);
+
+    $brain = (new FakeBrain)->answers('get', fn (array $args): array => match ((int) $args['id']) {
+        41 => ['data' => [
+            'id' => 41, 'kind' => 'org', 'formatted_name' => 'Wildpark Mueden GmbH',
+            'relations' => ['contact_persons' => [['id' => 85, 'name' => 'Kasse Besucherservice']]],
+        ]],
+        85 => ['data' => ['id' => 85, 'kind' => 'individual', 'formatted_name' => 'Kasse Besucherservice']],
+        default => ['data' => null],
+    });
+
+    app()->instance(ContactStore::class, $brain->store());
+
+    $this->artisan('contacts:spiegel-auffrischen')->assertSuccessful();
+
+    expect(Contact::find(85))->not->toBeNull()
+        ->and(Contact::find(85)->formatted_name)->toBe('Kasse Besucherservice');
+});

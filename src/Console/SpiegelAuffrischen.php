@@ -3,6 +3,7 @@
 namespace Peppermint\Contacts\Console;
 
 use Illuminate\Console\Command;
+use Peppermint\Contacts\Contacts\Kind;
 use Peppermint\Contacts\Contracts\ContactStore;
 use Peppermint\Contacts\Models\Contact;
 use Peppermint\Contacts\Stores\BrainContactStore;
@@ -64,14 +65,40 @@ class SpiegelAuffrischen extends Command
 
         $gelesen = 0;
         $verschwunden = 0;
+        $dazugekommen = 0;
 
         Contact::query()
             ->orderBy('id')
-            ->chunkById((int) $this->option('chunk'), function ($kontakte) use ($store, $bar, &$gelesen, &$verschwunden): void {
+            ->chunkById((int) $this->option('chunk'), function ($kontakte) use ($store, $bar, &$gelesen, &$verschwunden, &$dazugekommen): void {
                 foreach ($kontakte as $kontakt) {
                     // `find()` holt zentral und spiegelt die Antwort — Kern,
                     // Anhaengsel und seit v0.10.0 auch die Beziehungen.
-                    $store->find($kontakt->getKey()) === null ? $verschwunden++ : $gelesen++;
+                    if ($store->find($kontakt->getKey()) === null) {
+                        $verschwunden++;
+                        $bar->advance();
+
+                        continue;
+                    }
+
+                    $gelesen++;
+
+                    // Bei einer Organisation ausserdem ihre Ansprechpartner.
+                    //
+                    // Ein Produkt spiegelt sonst nur, was es selbst gelesen
+                    // hat — und eine Person, die ANDERSWO an diese
+                    // Organisation gehaengt wurde, taucht hier nie auf. Beim
+                    // Zusammenfuehren zweier Firmen am 17.09.2026 war genau
+                    // das der Fall: Die Verwaltung zeigte null
+                    // Ansprechpartner, obwohl das Adressbuch einen kannte.
+                    //
+                    // Nur fuer Organisationen: Bei einer Person laeuft die
+                    // Beziehung ohnehin ueber `works_for` mit.
+                    if ($kontakt->kind === Kind::Org) {
+                        $vorher = Contact::query()->count();
+                        $store->contactPersonsOf($kontakt->getKey());
+                        $dazugekommen += max(0, Contact::query()->count() - $vorher);
+                    }
+
                     $bar->advance();
                 }
             });
@@ -80,6 +107,7 @@ class SpiegelAuffrischen extends Command
         $this->newLine(2);
 
         $this->components->twoColumnDetail('nachgezogen', (string) $gelesen);
+        $this->components->twoColumnDetail('Ansprechpartner dazugekommen', (string) $dazugekommen);
         $this->components->twoColumnDetail('zentral nicht mehr vorhanden', (string) $verschwunden);
 
         if ($verschwunden > 0) {
