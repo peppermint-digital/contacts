@@ -48,18 +48,23 @@ use Peppermint\Contacts\Stores\LocalContactStore;
  * | Schreiben veraltet | `['conflict' => true, 'current' => array]` |
  * | Brain nicht erreichbar | der Aufruf gibt `null` zurueck |
  *
- * `null` ist ein Zustand, kein Fehler: Es heisst „nicht erreichbar", und
- * darauf antwortet der Speicher mit dem Spiegel, nicht mit einem Wurf.
+ * `null` heisst „nicht erreichbar". Seit dem 24.09.2026 wirft der zentrale
+ * Speicher darauf `StoreUnavailable`, statt eine lokale Kopie zu befragen —
+ * es gibt keine mehr, und es soll keine geben. Ein alter Stand, den niemand
+ * als alt erkennt, ist schlimmer als eine ehrliche Absage.
  */
 interface ContactStore
 {
     /**
      * Ein Kontakt ueber seine Kennung, oder null.
      *
-     * Wirft NIE, wenn die Gegenstelle weg ist. Der Aufrufer bekommt den
-     * letzten guten Stand oder nichts, und die Seite rendert trotzdem. Eine
-     * Rechnungsmaske, die sich weigert zu erscheinen, weil ein zweites System
-     * down ist, ist schlimmer als eine mit einer Woche alter Anschrift.
+     * `null` heisst „gibt es nicht" — eine Antwort, kein Ausfall.
+     *
+     * Ist die Gegenstelle weg, wirft der zentrale Speicher `StoreUnavailable`.
+     * Hier stand bis zum 24.09.2026 das Gegenteil: Der Aufrufer bekomme den
+     * letzten guten Stand, damit die Rechnungsmaske erscheint. Das setzte
+     * voraus, dass jemand die Maske ueberhaupt erreicht — und das tut er
+     * nicht: Die Anmeldung laeuft selbst ueber AI Brain.
      */
     public function find(string|int $id): ?Contact;
 

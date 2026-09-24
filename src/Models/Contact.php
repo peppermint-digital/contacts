@@ -284,8 +284,34 @@ class Contact extends Model
      * kennt einen `contact_person` als Freitext, `SignatureRequest` tippt
      * Name und Adresse jedes Mal neu ein.
      */
+    /**
+     * Ansprechpartner, die schon mitgeliefert wurden.
+     *
+     * Ohne lokalen Spiegel gibt es keine Tabelle, die man fragen koennte —
+     * der Kontakt kommt als Ganzes aus dem Brain, Ansprechpartner
+     * eingeschlossen. Sie hier abzulegen haelt `contactPersons()` fuer die
+     * Aufrufer unveraendert: Sie merken nicht, woher die Antwort kommt.
+     *
+     * @var Collection<int, Contact>|null
+     */
+    private ?Collection $mitgelieferteAnsprechpartner = null;
+
+    /**
+     * @param  Collection<int, Contact>  $personen
+     */
+    public function withContactPersons(Collection $personen): static
+    {
+        $this->mitgelieferteAnsprechpartner = $personen;
+
+        return $this;
+    }
+
     public function contactPersons(): Collection
     {
+        if ($this->mitgelieferteAnsprechpartner !== null) {
+            return $this->mitgelieferteAnsprechpartner;
+        }
+
         return $this->inverseRelations()
             ->where('type', ContactRelation::WorksFor)
             // Der Hauptansprechpartner zuerst — wer einen Beleg beschriftet,

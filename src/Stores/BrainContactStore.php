@@ -2,57 +2,71 @@
 
 namespace Peppermint\Contacts\Stores;
 
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Peppermint\Contacts\Contacts\Kind;
-use Peppermint\Contacts\Contacts\StoreGuard;
 use Peppermint\Contacts\Contracts\ContactStore;
 use Peppermint\Contacts\Exceptions\BrainRejected;
 use Peppermint\Contacts\Exceptions\ProfileConflict;
 use Peppermint\Contacts\Exceptions\StaleContact;
 use Peppermint\Contacts\Exceptions\StoreUnavailable;
 use Peppermint\Contacts\Models\Contact;
-use Peppermint\Contacts\Models\ContactRelation;
+use Peppermint\Contacts\Models\ContactAddress;
+use Peppermint\Contacts\Models\ContactEmail;
+use Peppermint\Contacts\Models\ContactPhone;
 
 /**
- * Die Kontakte liegen zentral im AI Brain — lokal gespiegelt, und schreibend.
+ * Die Kontakte liegen zentral im AI Brain — und NUR dort.
  *
- * ## Der Spiegel ist keine Beschleunigung, sondern die Ausfallsicherung
+ * ## Warum es keine lokale Kopie mehr gibt
  *
- * Am 15.09.2026 war die Brain-Verbindung ueber zwei Stunden tot. Laege alles
- * zentral ohne Puffer, koennte die Verwaltung in so einer Lage **keine
- * Rechnung schreiben** — die Anschrift fehlt. Mit Spiegel geht das Lesen
- * weiter, nur Anlegen und Aendern pausieren.
+ * Bis zum 24.09.2026 spiegelte dieser Speicher jede gelesene Antwort in
+ * lokale Tabellen. Begruendet war das mit Latenz und Ausfallsicherheit.
+ * Beides wurde an diesem Tag am Code gemessen, und beides hielt nicht:
  *
- * **Nur Erfolg wird gespiegelt.** Ein Fehlschlag darf den letzten guten Stand
- * nicht ueberschreiben, sonst wird aus einem kurzen Ausfall ein langer: Man
- * verliert nicht die Verbindung, sondern die Daten, die man ohne sie noch
- * haette lesen koennen.
+ * **Latenz.** `readOne()` rief schon immer ZUERST das Brain und griff nur
+ * bei einer leeren Antwort auf die Kopie zurueck. Der Spiegel wurde im
+ * Normalbetrieb also nie gelesen — bei jedem Treffer aber neu geschrieben.
+ * Er kostete Schreiblast und sparte nichts.
  *
- * ## Der Spiegel sind die lokalen Tabellen, kein Cache-Eintrag
+ * **Ausfall.** Die Anmeldung der Produkte laeuft selbst ueber AI Brain. Ist
+ * das Brain weg, kommt niemand mehr ins System — die Lage, fuer die der
+ * Spiegel gedacht war, ist von aussen gar nicht erreichbar. Gemessen an der
+ * Verwaltung: kein Passwortfeld, Sitzungsdauer 120 Minuten, und der Ausfall
+ * vom 15.09.2026, der den Spiegel begruendet hatte, dauerte „2+ Stunden" —
+ * ungefaehr eine Sitzungslaenge.
  *
- * Anders als beim Mail-Paket, und mit Absicht. Eine Autovervollstaendigung,
- * die pro Anschlag uebers Netz geht, ist unbenutzbar; ein Suchlauf ueber ein
- * serialisiertes Feld im Cache ebenso. Die Kopie liegt deshalb in denselben
- * indizierten Tabellen, die der lokale Speicher benutzt — mit `mirrored_at`
- * als Merkmal, dass es eben eine Kopie ist.
+ * Geblieben waere eine zweite Datenhaltung, die auseinanderlaufen kann. Genau
+ * die soll ein geteiltes Kontaktpaket beseitigen.
  *
- * Damit die Kopie dieselbe Sache bezeichnet wie das Original, uebernimmt sie
- * den Primaerschluessel des Brains. Sonst haette derselbe Kontakt zwei
- * Nummern, und jeder Verweis darauf muesste uebersetzt werden.
+ * ## Was stattdessen geschieht
  *
- * > Achtung fuer E4: Ein Produkt, das von `local` auf `brain` umsteigt, hat
- * > eigene Zeilen mit eigenen IDs. Die koennen mit denen des Brains
- * > kollidieren. Das ist genau der Grund, warum die Verwaltung ueberfuehrt
- * > und nicht bloss umgeschaltet wird.
+ * `hydrate()` baut aus der Antwort Modelle im Arbeitsspeicher — dieselbe
+ * Klasse, dieselben Beziehungen, aber `exists = false` und keine Zeile
+ * dahinter. Fuer die Aufrufer aendert sich damit fast nichts; sie lesen
+ * weiter `$kontakt->addresses`, nur steht darunter keine Tabelle.
+ *
+ * **Kein `load()` auf diesen Modellen.** Es fragte die Datenbank, faende
+ * nichts und ueberschriebe die gesetzten Anhaengsel mit leeren Sammlungen —
+ * aus „laedt mit" wuerde lautlos „ist leer".
+ *
+ * ## Bei Ausfall: Absage statt alter Stand
+ *
+ * Es gibt nichts, worauf zurueckzufallen waere, und das ist gewollt. Ein
+ * veralteter Stand, den niemand als veraltet erkennt, ist schlimmer als eine
+ * ehrliche Absage — siehe das Learning „Fail-closed verbirgt den eigenen
+ * Ausfall".
+ *
+ * ## Die lokalen Tabellen gibt es nur ohne Brain
+ *
+ * Laeuft das Paket eigenstaendig (`store = local`), traegt es sich selbst mit
+ * eigenen Tabellen. Das ist der einzige Fall, fuer den sie existieren.
  *
  * ## Schreiben: das Brain gewinnt
  *
- * Die eine echte Neuerung gegenueber dem Mail-Paket, dessen zentraler
- * Speicher `isWritable() === false` ist. Hier schreiben die Produkte durch —
- * und wer einen veralteten Stand schickt, bekommt eine **Absage** statt eines
- * stillen Ueberschreibens.
+ * Die Produkte schreiben durch — und wer einen veralteten Stand schickt,
+ * bekommt eine **Absage** statt eines stillen Ueberschreibens.
  */
 class BrainContactStore implements ContactStore
 {
@@ -72,32 +86,20 @@ class BrainContactStore implements ContactStore
 
     public function find(string|int $id): ?Contact
     {
-        return $this->readOne(
-            fn (): ?array => $this->ask('get', ['id' => $id]),
-            fn (): ?Contact => Contact::query()->find($id),
-        );
+        return $this->readOne(fn (): ?array => $this->ask('get', ['id' => $id]));
     }
 
     public function findByUid(string $uid): ?Contact
     {
-        return $this->readOne(
-            fn (): ?array => $this->ask('get', ['uid' => $uid]),
-            fn (): ?Contact => Contact::query()->where('uid', $uid)->first(),
-        );
+        return $this->readOne(fn (): ?array => $this->ask('get', ['uid' => $uid]));
     }
 
     public function findByEmail(string $email, ?Kind $kind = null): ?Contact
     {
-        return $this->readOne(
-            fn (): ?array => $this->ask('find-by-email', array_filter([
-                'email' => $email,
-                'kind' => $kind?->value,
-            ])),
-            fn (): ?Contact => Contact::query()
-                ->whereHas('emails', fn ($e) => $e->where('value', $email))
-                ->when($kind !== null, fn ($q) => $q->where('kind', $kind->value))
-                ->first(),
-        );
+        return $this->readOne(fn (): ?array => $this->ask('find-by-email', array_filter([
+            'email' => $email,
+            'kind' => $kind?->value,
+        ])));
     }
 
     public function search(string $query, int $limit = 25): Collection
@@ -105,29 +107,29 @@ class BrainContactStore implements ContactStore
         $response = $this->ask('search', ['query' => $query, 'limit' => $limit]);
 
         if ($response === null) {
-            $this->warnFallback('Suche');
-
-            return (new LocalContactStore)->search($query, $limit);
+            throw StoreUnavailable::forRead('Suche');
         }
 
         // Eloquent-Sammlung und nicht `collect()`: Nur sie kann `load()`.
         $treffer = Contact::query()->newModelInstance()->newCollection(
             collect($response['data'] ?? [])
-                ->map(fn (array $row): ?Contact => $this->mirror($row))
+                ->map(fn (array $row): ?Contact => $this->hydrate($row))
                 ->filter()
                 ->values()
                 ->all()
         );
 
-        // Einmal nachladen statt je Treffer: Der Aufrufer braucht die Adressen
-        // (danach sucht er ja), und ohne diese Zeile wirft der Zugriff dort,
-        // wo Lazy Loading abgeschaltet ist.
+        // KEIN `load()` mehr.
         //
-        // Auf der Sammlung und nicht ueber eine neue Abfrage: Die Reihenfolge
-        // kommt vom Brain und ist eine Aussage darueber, was am besten passt.
-        // Ein `whereKey(...)->get()` gaebe sie preis und lieferte die der
-        // Datenbank — bei Vorschlaegen ist die Reihenfolge der halbe Nutzen.
-        return $treffer->load(['emails', 'phones', 'addresses']);
+        // Es stand hier, solange die Treffer gespiegelte Zeilen waren. Jetzt
+        // sind es Modelle ohne Tabelle dahinter — `load()` fragte die
+        // Datenbank, faende nichts und ueberschriebe die eben gesetzten
+        // Anhaengsel mit leeren Sammlungen. Aus „laedt mit" wuerde lautlos
+        // „ist leer".
+        //
+        // Die Reihenfolge kommt vom Brain und bleibt: Bei Vorschlaegen ist
+        // sie der halbe Nutzen.
+        return $treffer;
     }
 
     public function findMany(array $ids): Collection
@@ -139,22 +141,18 @@ class BrainContactStore implements ContactStore
         $response = $this->ask('list', ['ids' => array_values($ids)]);
 
         if ($response === null) {
-            $this->warnFallback('Sammelabruf');
-
-            return (new LocalContactStore)->findMany($ids);
+            throw StoreUnavailable::forRead('Sammelabruf');
         }
 
         $treffer = Contact::query()->newModelInstance()->newCollection(
             collect($response['data'] ?? [])
-                ->map(fn (array $row): ?Contact => $this->mirror($row))
+                ->map(fn (array $row): ?Contact => $this->hydrate($row))
                 ->filter()
                 ->values()
                 ->all()
         );
 
-        // Wie bei der Suche: einmal nachladen statt je Treffer. Wer einen
-        // Sammelabruf macht, will genau nicht N Folgeabfragen.
-        return $treffer->load(['emails', 'phones', 'addresses']);
+        return $treffer;
     }
 
     public function upsert(array $attributes): Contact
@@ -178,7 +176,7 @@ class BrainContactStore implements ContactStore
 
         $this->pruefeAntwort($response);
 
-        $contact = $this->mirror($response['data'] ?? []);
+        $contact = $this->hydrate($response['data'] ?? []);
 
         if ($contact === null) {
             throw new BrainRejected('Die Antwort enthielt keinen Kontakt.', $response);
@@ -212,24 +210,15 @@ class BrainContactStore implements ContactStore
     /**
      * Die Ansprechpartner einer Organisation — direkt aus dem Brain.
      *
-     * Bei Ausfall aus dem Spiegel — seit die Beziehungen mitgespiegelt
-     * werden, steht die Antwort dort. Genau dafuer gibt es ihn: Ein Produkt
-     * muss auch ohne Verbindung sagen koennen, wer fuer eine Firma arbeitet,
-     * sonst haelt es doch wieder eine eigene Tabelle daneben.
-     *
-     * Fuer das Entdoppeln beim Ueberfuehren ist das unkritisch: Dort wird
-     * geschrieben, und Schreiben verlangt ohnehin eine Verbindung.
+     * Bei Ausfall gibt es keine Antwort — und das ist richtig so. Es gibt
+     * keine lokale Kopie mehr, aus der man sie nehmen koennte.
      */
     public function contactPersonsOf(string|int $organisationId): Collection
     {
         $response = $this->ask('get', ['id' => $organisationId]);
 
         if ($response === null) {
-            $this->warnFallback('Ansprechpartner');
-
-            $org = Contact::query()->find($organisationId);
-
-            return $org === null ? collect() : $org->contactPersons();
+            throw StoreUnavailable::forRead('Ansprechpartner');
         }
 
         $row = $response['data'] ?? null;
@@ -257,24 +246,13 @@ class BrainContactStore implements ContactStore
 
         $this->pruefeAntwort($response);
 
-        // Auch im Spiegel loesen, damit die Oberflaeche nicht bis zum
-        // naechsten Auffrischen etwas zeigt, das zentral nicht mehr gilt.
-        StoreGuard::bypass(function () use ($contactId, $organisationId): void {
-            ContactRelation::query()
-                ->where('contact_id', $contactId)
-                ->where('related_contact_id', $organisationId)
-                ->where('type', ContactRelation::WorksFor)
-                ->delete();
-        });
     }
 
     /**
      * Zusammengefuehrt wird zentral.
      *
-     * Nicht lokal und dann hochgeschickt: Das Zusammenfuehren loest eine
-     * Zeile auf, und wer das an der Kopie tut, hat eine Kopie ohne Zeile und
-     * ein Zentrum mit. Beim naechsten Spiegeln waere sie wieder da — und der
-     * Mensch davor haelt das fuer einen Fehler.
+     * Das Zusammenfuehren loest eine Zeile auf. Es gehoert deshalb dorthin,
+     * wo die Zeile lebt — ins Brain.
      */
     public function merge(Contact|int $into, Contact|int $from): Contact
     {
@@ -294,20 +272,14 @@ class BrainContactStore implements ContactStore
             throw new ProfileConflict($response['tables'] ?? []);
         }
 
-        $contact = $this->mirror($response['data'] ?? []);
+        $contact = $this->hydrate($response['data'] ?? []);
 
         if ($contact === null) {
             throw StoreUnavailable::forWrite();
         }
 
-        // Die aufgeloeste Zeile muss auch aus der Kopie verschwinden, sonst
-        // steht die Dublette lokal weiter in der Suche.
-        $fromId = $from instanceof Contact ? $from->getKey() : $from;
-
-        StoreGuard::bypass(function () use ($fromId): void {
-            Contact::query()->whereKey($fromId)->delete();
-        });
-
+        // Kein lokales Nachraeumen mehr: Es gibt keine Kopie, in der die
+        // aufgeloeste Zeile stehenbleiben koennte.
         return $contact;
     }
 
@@ -323,25 +295,33 @@ class BrainContactStore implements ContactStore
         }
 
         return 'AI Brain war beim letzten Zugriff nicht erreichbar. Kontakte lassen sich '
-            .'gerade nur lesen — die Anzeige kommt aus der lokalen Kopie und kann veraltet sein.';
+            .'gerade weder lesen noch aendern — es gibt keine lokale Kopie, aus der '
+            .'geantwortet werden koennte.';
     }
 
     // -----------------------------------------------------------------
 
     /**
-     * Einen einzelnen Kontakt holen: zentral, sonst aus dem Spiegel.
+     * Einen einzelnen Kontakt holen — zentral, und nur dort.
      *
      * @param  callable(): ?array  $fromBrain
-     * @param  callable(): ?Contact  $fromMirror
      */
-    private function readOne(callable $fromBrain, callable $fromMirror): ?Contact
+    private function readOne(callable $fromBrain): ?Contact
     {
         $response = $fromBrain();
 
+        // Kein zweiter Weg mehr.
+        //
+        // Hier stand bis zum 24.09.2026 ein Rueckfall auf die lokale Kopie.
+        // Er sicherte einen Fall ab, den es so nicht gibt: Die Anmeldung
+        // laeuft selbst ueber AI Brain — ist das Brain weg, kommt ohnehin
+        // niemand ins System. Geblieben waere nur eine zweite
+        // Datenhaltung, die auseinanderlaufen kann.
+        //
+        // Eine ehrliche Absage ist besser als ein alter Stand, den niemand
+        // als alt erkennt.
         if ($response === null) {
-            $this->warnFallback('Kontakt');
-
-            return $fromMirror();
+            throw StoreUnavailable::forRead('Kontakt');
         }
 
         $row = $response['data'] ?? null;
@@ -354,7 +334,7 @@ class BrainContactStore implements ContactStore
             return null;
         }
 
-        return $this->mirror($row);
+        return $this->hydrate($row);
     }
 
     /**
@@ -370,168 +350,77 @@ class BrainContactStore implements ContactStore
         return $response;
     }
 
-    private function warnFallback(string $was): void
-    {
-        Log::warning(
-            "Kontakte ({$was}): AI Brain nicht erreichbar — es wird aus der lokalen Kopie gelesen. "
-            .'Aendern ist bis auf Weiteres gesperrt.'
-        );
-    }
-
     /**
-     * Die Verbindung zur Organisation mit spiegeln — wenn es sie lokal gibt.
+     * Einen Kontakt im Arbeitsspeicher aufbauen — ohne ihn zu speichern.
      *
-     * ## Warum nur diese Richtung
+     * Dieselbe Antwort, dasselbe Modell, nur ohne Zeile dahinter. Im
+     * Brain-Betrieb hat ein Produkt seine Kontaktdaten NICHT in der eigenen
+     * Datenbank: Was hier entsteht, lebt fuer die Dauer eines Aufrufs und
+     * verschwindet danach.
      *
-     * Gespiegelt wird `works_for`, also der Blick von der PERSON auf ihre
-     * Organisation. Der umgekehrte Blick („wer arbeitet hier?") entsteht
-     * daraus von selbst, sobald die Personen gespiegelt sind — er braucht
-     * keine eigene Zeile.
-     *
-     * Andersherum ginge es nicht: Beim Spiegeln einer Organisation sind ihre
-     * Ansprechpartner lokal noch nicht da, und eine Beziehung auf einen
-     * Kontakt, den es nicht gibt, ist entweder ein Fremdschluesselfehler oder
-     * eine Zeile, die auf nichts zeigt.
-     *
-     * ## Warum ueberhaupt
-     *
-     * Ohne diese Zeilen kann ein Produkt bei Ausfall nicht beantworten, wer
-     * fuer eine Firma arbeitet — und genau deshalb hielten die Produkte
-     * bisher ihre eigenen Ansprechpartner-Tabellen daneben. Der Spiegel muss
-     * die Frage beantworten koennen, sonst bleibt die Doppelung bestehen.
-     *
-     * @param  array<string, mixed>  $relations
+     * Die Anhaengsel werden als Beziehungen GESETZT, nicht geladen: Ein
+     * `load()` fragte eine Tabelle, die es hier nicht mehr gibt.
      */
-    private function spiegleBeziehungen(Contact $contact, array $relations): void
+    private function hydrate(array $row): ?Contact
     {
-        $organisationen = $relations['works_for'] ?? null;
-
-        // Nicht mitgeschickt heisst nicht geloescht — dieselbe Regel wie bei
-        // den Anhaengseln.
-        if (! is_array($organisationen)) {
-            return;
-        }
-
-        $vorhanden = collect($organisationen)
-            ->pluck('id')
-            ->filter()
-            ->filter(fn ($id): bool => Contact::query()->whereKey($id)->exists())
-            ->values();
-
-        ContactRelation::query()
-            ->where('contact_id', $contact->getKey())
-            ->where('type', ContactRelation::WorksFor)
-            ->whereNotIn('related_contact_id', $vorhanden->all())
-            ->delete();
-
-        foreach ($organisationen as $organisation) {
-            if (! $vorhanden->contains($organisation['id'] ?? null)) {
-                continue;
-            }
-
-            ContactRelation::query()->updateOrCreate(
-                [
-                    'contact_id' => $contact->getKey(),
-                    'related_contact_id' => $organisation['id'],
-                    'type' => ContactRelation::WorksFor,
-                ],
-                ['is_primary' => (bool) ($organisation['is_primary'] ?? false)],
-            );
-        }
-    }
-
-    /**
-     * Den zentralen Stand in die lokale Kopie schreiben.
-     *
-     * Wird ausschliesslich mit einer ERFOLGREICHEN Antwort aufgerufen — das
-     * ist die Regel „nur Erfolg wird gespiegelt", und sie steht hier als
-     * Aufrufbedingung statt als Pruefung, weil eine Pruefung auf „war das
-     * ein Erfolg?" an dieser Stelle nicht mehr entscheidbar waere.
-     *
-     * Beziehungen werden mitgespiegelt — aber nur die, deren Gegenseite es
-     * lokal schon gibt. Siehe {@see spiegleBeziehungen()}.
-     *
-     * @param  array<string, mixed>  $row
-     */
-    private function mirror(array $row): ?Contact
-    {
-        $id = $row['id'] ?? null;
-
-        if ($id === null) {
+        if (($row['id'] ?? null) === null) {
             // Die Antwort mitloggen, nicht nur ihr Fehlen: Ohne sie ist von
             // aussen nicht zu unterscheiden, ob die Gegenseite abgelehnt,
             // etwas anderes geschickt oder schlicht nichts gefunden hat.
-            Log::warning('Kontakte: Antwort ohne Kennung erhalten — nicht gespiegelt.', [
+            Log::warning('Kontakte: Antwort ohne Kennung erhalten.', [
                 'antwort' => mb_substr(json_encode($row, JSON_UNESCAPED_UNICODE) ?: '', 0, 500),
             ]);
 
             return null;
         }
 
-        // Nur, was die Antwort auch WIRKLICH mitbringt.
-        //
-        // „Nicht mitgeschickt" ist nicht „zentral geloescht". Eine
-        // Trefferliste liefert aus gutem Grund die Kurzform ohne Adressen —
-        // wuerde der Spiegel daraus eine leere Liste machen, wischte jede
-        // Suche die Adressen aller Treffer aus der lokalen Kopie. Bei
-        // Ausfall stuenden die Kontakte dann ohne Anschrift da, und genau
-        // dafuer gibt es den Spiegel.
-        $kinder = array_filter(
-            [
-                'emails' => $row['emails'] ?? null,
-                'phones' => $row['phones'] ?? null,
-                'addresses' => $row['addresses'] ?? null,
-            ],
-            fn (?array $zeilen): bool => $zeilen !== null,
-        );
+        $kontakt = $this->alsModell(new Contact, collect($row)->except(['emails', 'phones', 'addresses', 'relations'])->all());
 
-        $kern = collect($row)
-            ->except(['emails', 'phones', 'addresses', 'relations'])
-            ->all();
+        foreach ([
+            'emails' => ContactEmail::class,
+            'phones' => ContactPhone::class,
+            'addresses' => ContactAddress::class,
+        ] as $name => $klasse) {
+            $kontakt->setRelation($name, new EloquentCollection(
+                collect($row[$name] ?? [])
+                    ->map(fn (array|string $zeile) => $this->alsModell(
+                        new $klasse,
+                        [...$this->zeileNormieren($zeile), 'contact_id' => $row['id']],
+                    ))
+                    ->all()
+            ));
+        }
 
-        $beziehungen = $row['relations'] ?? [];
+        // Die Ansprechpartner kommen als Namen mit. Mehr braucht eine Liste
+        // nicht, und mehr zu holen hiesse, je Zeile noch einmal zu fragen.
+        return $kontakt->withContactPersons(new EloquentCollection(
+            collect($row['relations']['contact_persons'] ?? [])
+                ->map(fn (array $person) => $this->alsModell(new Contact, [
+                    'id' => $person['id'] ?? null,
+                    'formatted_name' => $person['name'] ?? null,
+                ]))
+                ->all()
+        ));
+    }
 
-        return StoreGuard::bypass(fn (): Contact => DB::transaction(function () use ($id, $kern, $kinder, $beziehungen): Contact {
-            $contact = Contact::query()->firstOrNew(['id' => $id]);
-            $contact->forceFill($kern);
-            $contact->mirrored_at = now();
+    /**
+     * Ein Modell mit Werten fuellen, ohne es als gespeichert auszugeben.
+     *
+     * `exists = false` ist der entscheidende Teil: Eloquent haelt die Zeile
+     * damit fuer neu. Wer trotzdem `save()` aufruft, laeuft in den Riegel
+     * aus `GuardsDirectWrites` — er wuerde sonst genau die Kopie anlegen,
+     * die hier verschwinden soll.
+     *
+     * @param  array<string, mixed>  $werte
+     *
+     * @template TModell of \Illuminate\Database\Eloquent\Model
+     */
+    private function alsModell(object $modell, array $werte): object
+    {
+        $modell->forceFill($werte);
+        $modell->exists = false;
 
-            // Der namenlose Kontakt — zentral entstanden aus einer Mail, die
-            // nur eine Adresse hatte. Er muss die Ring-1-Pruefung bestehen,
-            // und die laeuft beim Speichern, waehrend die Adressen erst
-            // danach angelegt werden. Ohne Vormerken scheitert ausgerechnet
-            // der Fall, fuer den die Regel „Name ODER E-Mail" gemacht ist.
-            //
-            // Nur wenn noetig: Beim Kontakt mit Namen waere es eine Zeile
-            // Arbeit, die gleich darauf wieder ueberschrieben wird.
-            if (! $contact->hasIdentifier()) {
-                foreach ($kinder['emails'] ?? [] as $email) {
-                    $wert = $this->zeileNormieren($email)['value'] ?? null;
-
-                    if ($wert !== null) {
-                        $contact->withEmail($wert);
-                    }
-                }
-            }
-
-            $contact->save();
-
-            // Ersetzen statt zusammenfuehren: Eine Adresse, die zentral
-            // entfernt wurde, muss auch hier verschwinden. Wer nur ergaenzt,
-            // sammelt in der Kopie genau die Karteileichen an, die zentral
-            // schon aufgeraeumt sind.
-            foreach ($kinder as $beziehung => $zeilen) {
-                $contact->{$beziehung}()->delete();
-
-                foreach ($zeilen as $zeile) {
-                    $contact->{$beziehung}()->create($this->zeileNormieren($zeile));
-                }
-            }
-
-            $this->spiegleBeziehungen($contact, $beziehungen);
-
-            return $contact->refresh();
-        }));
+        return $modell;
     }
 
     /**

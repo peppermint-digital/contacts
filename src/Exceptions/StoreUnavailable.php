@@ -7,10 +7,14 @@ use RuntimeException;
 /**
  * Geschrieben werden sollte, aber der zentrale Speicher ist nicht erreichbar.
  *
- * Bewusst ein Wurf und keine stille Rueckgabe: Lesen geht in dieser Lage
- * weiter (der Spiegel traegt), Schreiben pausiert — aber sichtbar. Wer
- * speichert und ein „gespeichert" zurueckbekommt, das nichts gespeichert hat,
- * tippt seine Aenderung nicht noch einmal ein.
+ * Bewusst ein Wurf und keine stille Rueckgabe. Wer speichert und ein
+ * „gespeichert" zurueckbekommt, das nichts gespeichert hat, tippt seine
+ * Aenderung nicht noch einmal ein.
+ *
+ * Seit dem 24.09.2026 gilt das auch beim LESEN: Es gibt keine lokale Kopie
+ * mehr, auf die man zurueckfallen koennte, und es soll auch keine geben. Ein
+ * alter Stand, den niemand als alt erkennt, ist schlimmer als eine Absage —
+ * siehe „Fail-closed verbirgt den eigenen Ausfall".
  */
 class StoreUnavailable extends RuntimeException
 {
@@ -18,8 +22,20 @@ class StoreUnavailable extends RuntimeException
     {
         return new self(
             'Der Kontakt konnte nicht gespeichert werden: AI Brain ist gerade nicht erreichbar. '
-            .'Gelesen wird weiter aus der lokalen Kopie — geaendert werden kann erst wieder, '
-            .'wenn die Verbindung steht. Die Aenderung ist NICHT uebernommen.'
+            .'Die Aenderung ist NICHT uebernommen — bitte spaeter noch einmal versuchen.'
+        );
+    }
+
+    /**
+     * @param  string  $was  Was gelesen werden sollte, damit das Protokoll
+     *                       die Stelle nennt und nicht nur den Ausfall.
+     */
+    public static function forRead(string $was): self
+    {
+        return new self(
+            "Kontakte ({$was}): AI Brain ist gerade nicht erreichbar. "
+            .'Es gibt keine lokale Kopie, aus der geantwortet werden koennte — '
+            .'das ist so gewollt. Bitte spaeter noch einmal versuchen.'
         );
     }
 }
