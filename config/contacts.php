@@ -58,6 +58,7 @@ return [
         'get' => env('CONTACTS_TOOL_GET', 'get-contact-tool'),
         'find-by-email' => env('CONTACTS_TOOL_GET', 'get-contact-tool'),
         'search' => env('CONTACTS_TOOL_SEARCH', 'search-contacts-tool'),
+        'list' => env('CONTACTS_TOOL_LIST', 'list-contacts-tool'),
         'upsert' => env('CONTACTS_TOOL_UPSERT', 'upsert-contact-tool'),
         'merge' => env('CONTACTS_TOOL_MERGE', 'merge-contacts-tool'),
         'unlink' => env('CONTACTS_TOOL_UNLINK', 'unlink-contact-tool'),

@@ -288,3 +288,57 @@ it('spiegelt auch die Kurzfassung, in der Adressen blosse Zeichenketten sind', f
 
     expect($treffer->emails->first()->value)->toBe('anke@bergbau.test');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Sammelabruf (v0.24.0)
+|--------------------------------------------------------------------------
+|
+| Ohne ihn braeuchte eine Liste von 40 Kunden 40 Netzaufrufe, um 40 Namen
+| anzuzeigen. Er ist die Voraussetzung dafuer, den lokalen Spiegel ueberhaupt
+| entfernen zu koennen.
+*/
+
+it('holt viele Kontakte in EINEM Aufruf', function (): void {
+    $brain = (new FakeBrain)->answers('list', ['data' => [
+        kontaktAusDemBrain(['id' => 77, 'formatted_name' => 'Erste GmbH']),
+        kontaktAusDemBrain(['id' => 78, 'uid' => 'urn:uuid:def-456', 'formatted_name' => 'Zweite GmbH']),
+    ]]);
+
+    $treffer = $brain->store()->findMany([77, 78]);
+
+    expect($treffer)->toHaveCount(2)
+        ->and($treffer->pluck('formatted_name')->all())->toBe(['Erste GmbH', 'Zweite GmbH'])
+        ->and(collect($brain->calls)->where(0, 'list'))->toHaveCount(1);
+});
+
+it('fragt gar nicht erst, wenn die Liste leer ist', function (): void {
+    $brain = (new FakeBrain)->answers('list', ['data' => []]);
+
+    expect($brain->store()->findMany([]))->toHaveCount(0)
+        ->and($brain->askedFor('list'))->toBeFalse();
+});
+
+it('laedt Adressen und Telefone mit, statt sie einzeln nachzuholen', function (): void {
+    $brain = (new FakeBrain)->answers('list', ['data' => [kontaktAusDemBrain()]]);
+
+    $treffer = $brain->store()->findMany([77]);
+
+    expect($treffer->first()->relationLoaded('addresses'))->toBeTrue()
+        ->and($treffer->first()->addresses->first()->street)->toBe('Rechnungsweg 1');
+});
+
+it('faellt beim Sammelabruf auf die lokale Kopie zurueck, wenn das Brain weg ist', function (): void {
+    Contact::factory()->organisation('Aus der Kopie')->create(['id' => 77]);
+
+    $brain = (new FakeBrain)->goesDown();
+
+    expect($brain->store()->findMany([77])->pluck('formatted_name')->all())
+        ->toBe(['Aus der Kopie']);
+});
+
+it('laesst Unbekanntes einfach weg, statt eine Luecke zu melden', function (): void {
+    $brain = (new FakeBrain)->answers('list', ['data' => [kontaktAusDemBrain(['id' => 77])]]);
+
+    expect($brain->store()->findMany([77, 999]))->toHaveCount(1);
+});

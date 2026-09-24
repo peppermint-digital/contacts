@@ -90,6 +90,25 @@ interface ContactStore
     public function search(string $query, int $limit = 25): Collection;
 
     /**
+     * Viele Kontakte auf einmal — ein Aufruf statt einer je Zeile.
+     *
+     * Der Grund steht nicht im Bequemen, sondern im Entwurf: Sobald der
+     * lokale Spiegel faellt, hat ein Produkt seine Kontaktdaten NICHT mehr
+     * in der eigenen Datenbank. Eine Liste von 40 Kunden brauchte dann 40
+     * Netzaufrufe, um 40 Namen anzuzeigen — und das ist der Punkt, an dem
+     * eine an sich richtige Architektur im Betrieb durchfaellt.
+     *
+     * Was nicht gefunden wird, FEHLT in der Antwort. Die Sammlung ist also
+     * hoechstens so lang wie `$ids`, und der Aufrufer darf aus ihrer Laenge
+     * nichts ueber die Gueltigkeit einer einzelnen Nummer schliessen — eine
+     * zusammengefuehrte Zeile kommt unter ihrer neuen Nummer zurueck.
+     *
+     * @param  array<int, string|int>  $ids
+     * @return Collection<int, Contact>
+     */
+    public function findMany(array $ids): Collection;
+
+    /**
      * Anlegen oder aendern.
      *
      * @param  array<string, mixed>  $attributes  Kernfelder; `uid` waehlt den

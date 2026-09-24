@@ -130,6 +130,33 @@ class BrainContactStore implements ContactStore
         return $treffer->load(['emails', 'phones', 'addresses']);
     }
 
+    public function findMany(array $ids): Collection
+    {
+        if ($ids === []) {
+            return Contact::query()->newModelInstance()->newCollection();
+        }
+
+        $response = $this->ask('list', ['ids' => array_values($ids)]);
+
+        if ($response === null) {
+            $this->warnFallback('Sammelabruf');
+
+            return (new LocalContactStore)->findMany($ids);
+        }
+
+        $treffer = Contact::query()->newModelInstance()->newCollection(
+            collect($response['data'] ?? [])
+                ->map(fn (array $row): ?Contact => $this->mirror($row))
+                ->filter()
+                ->values()
+                ->all()
+        );
+
+        // Wie bei der Suche: einmal nachladen statt je Treffer. Wer einen
+        // Sammelabruf macht, will genau nicht N Folgeabfragen.
+        return $treffer->load(['emails', 'phones', 'addresses']);
+    }
+
     public function upsert(array $attributes): Contact
     {
         $response = $this->ask('upsert', $attributes);

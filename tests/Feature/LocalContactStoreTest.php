@@ -244,3 +244,56 @@ it('gibt Suchtreffer mit ihren Anhaengseln zurueck', function (): void {
         ->and($treffer->relationLoaded('addresses'))->toBeTrue()
         ->and($treffer->emails->first()->value)->toBe('anke@bergbau.test');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Sammelabruf (v0.24.0)
+|--------------------------------------------------------------------------
+*/
+
+it('holt viele Kontakte auf einmal', function (): void {
+    $eins = Contact::factory()->organisation('Erste GmbH')->create();
+    $zwei = Contact::factory()->organisation('Zweite GmbH')->create();
+    Contact::factory()->organisation('Nicht gefragt')->create();
+
+    $treffer = $this->store->findMany([$eins->id, $zwei->id]);
+
+    expect($treffer->pluck('formatted_name')->sort()->values()->all())
+        ->toBe(['Erste GmbH', 'Zweite GmbH']);
+});
+
+it('gibt bei leerer Liste eine leere Sammlung zurueck', function (): void {
+    expect($this->store->findMany([]))->toHaveCount(0);
+});
+
+it('laedt die Anhaengsel gleich mit', function (): void {
+    $kontakt = Contact::factory()->organisation('Mit Adresse')->create();
+    $kontakt->addresses()->create(['type' => 'work', 'street' => 'Hauptweg 3', 'city' => 'Kiel']);
+
+    $treffer = $this->store->findMany([$kontakt->id]);
+
+    expect($treffer->first()->relationLoaded('addresses'))->toBeTrue()
+        ->and($treffer->first()->addresses)->toHaveCount(1);
+});
+
+it('folgt der Spur einer zusammengefuehrten Zeile auch im Sammelabruf', function (): void {
+    $bleibt = Contact::factory()->organisation('Bleibt')->create();
+    $geht = Contact::factory()->organisation('Geht auf')->create();
+
+    $this->store->merge($bleibt, $geht);
+
+    // Ein Auftrag von vor drei Monaten zeigt noch auf die alte Nummer.
+    $treffer = $this->store->findMany([$geht->id]);
+
+    expect($treffer->pluck('formatted_name')->all())->toBe(['Bleibt']);
+});
+
+it('liefert einen zusammengefuehrten Kontakt nicht doppelt', function (): void {
+    $bleibt = Contact::factory()->organisation('Bleibt')->create();
+    $geht = Contact::factory()->organisation('Geht auf')->create();
+
+    $this->store->merge($bleibt, $geht);
+
+    // Beide Nummern gefragt — es ist derselbe Mensch.
+    expect($this->store->findMany([$bleibt->id, $geht->id]))->toHaveCount(1);
+});

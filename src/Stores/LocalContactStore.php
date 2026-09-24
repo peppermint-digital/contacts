@@ -93,6 +93,37 @@ class LocalContactStore implements ContactStore
             ->first();
     }
 
+    public function findMany(array $ids): Collection
+    {
+        if ($ids === []) {
+            return Contact::query()->newModelInstance()->newCollection();
+        }
+
+        $gefunden = Contact::query()
+            ->with(['emails', 'phones', 'addresses'])
+            ->whereKey($ids)
+            ->get();
+
+        // Wer fehlt, wurde vielleicht zusammengefuehrt. Einzeln nachgehen,
+        // aber nur fuer die Fehlenden: Die Spur zu verfolgen kostet je eine
+        // Abfrage, und sie fuer alle zu gehen hiesse, den Sammelabruf wieder
+        // in Einzelabrufe zu zerlegen.
+        $offen = array_diff(
+            array_map('strval', $ids),
+            $gefunden->pluck('id')->map('strval')->all(),
+        );
+
+        foreach ($offen as $id) {
+            $nachfolger = $this->followMergeTrail($id);
+
+            if ($nachfolger !== null && ! $gefunden->contains('id', $nachfolger->id)) {
+                $gefunden->push($nachfolger->load(['emails', 'phones', 'addresses']));
+            }
+        }
+
+        return $gefunden;
+    }
+
     public function search(string $query, int $limit = 25): Collection
     {
         return Contact::query()
