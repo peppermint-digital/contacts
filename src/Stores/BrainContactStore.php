@@ -391,16 +391,34 @@ class BrainContactStore implements ContactStore
             ));
         }
 
-        // Die Ansprechpartner kommen als Namen mit. Mehr braucht eine Liste
-        // nicht, und mehr zu holen hiesse, je Zeile noch einmal zu fragen.
-        return $kontakt->withContactPersons(new EloquentCollection(
-            collect($row['relations']['contact_persons'] ?? [])
-                ->map(fn (array $person) => $this->alsModell(new Contact, [
-                    'id' => $person['id'] ?? null,
-                    'formatted_name' => $person['name'] ?? null,
+        // Ansprechpartner UND Organisationen kommen als Namen mit. Mehr
+        // braucht eine Liste nicht, und mehr zu holen hiesse, je Zeile noch
+        // einmal zu fragen.
+        //
+        // Die Richtung `works_for` ist die, ueber die ein Produkt von einem
+        // gefundenen Menschen auf „seine" Firma kommt — ohne sie findet eine
+        // Kundensuche nach dem Ansprechpartner nichts.
+        return $kontakt
+            ->withContactPersons($this->alsKontakte($row['relations']['contact_persons'] ?? []))
+            ->withOrganizations($this->alsKontakte($row['relations']['works_for'] ?? []));
+    }
+
+    /**
+     * Eine Liste aus `{id, name}` als Kontakte im Arbeitsspeicher.
+     *
+     * @param  array<int, array<string, mixed>>  $zeilen
+     * @return EloquentCollection<int, Contact>
+     */
+    private function alsKontakte(array $zeilen): EloquentCollection
+    {
+        return new EloquentCollection(
+            collect($zeilen)
+                ->map(fn (array $eintrag) => $this->alsModell(new Contact, [
+                    'id' => $eintrag['id'] ?? null,
+                    'formatted_name' => $eintrag['name'] ?? null,
                 ]))
                 ->all()
-        ));
+        );
     }
 
     /**

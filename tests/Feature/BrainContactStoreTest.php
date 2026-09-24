@@ -348,3 +348,19 @@ it('laesst Unbekanntes einfach weg, statt eine Luecke zu melden', function (): v
 
     expect($brain->store()->findMany([77, 999]))->toHaveCount(1);
 });
+
+it('reicht die Organisation eines gefundenen Menschen mit durch', function (): void {
+    // Ohne diese Richtung findet eine Kundensuche nach dem Ansprechpartner
+    // die Firma nicht — der Mensch waere ein Treffer ohne Anschluss.
+    $brain = (new FakeBrain)->answers('list', ['data' => [[
+        'id' => 91,
+        'kind' => 'individual',
+        'formatted_name' => 'Anke Berg',
+        'relations' => ['works_for' => [['id' => 77, 'name' => 'Beispiel GmbH']]],
+    ]]]);
+
+    $person = $brain->store()->findMany([91])->first();
+
+    expect($person->organizations()->pluck('id')->all())->toBe([77])
+        ->and($person->organizations()->first()->formatted_name)->toBe('Beispiel GmbH');
+});

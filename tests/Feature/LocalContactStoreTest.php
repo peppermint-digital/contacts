@@ -297,3 +297,33 @@ it('liefert einen zusammengefuehrten Kontakt nicht doppelt', function (): void {
     // Beide Nummern gefragt — es ist derselbe Mensch.
     expect($this->store->findMany([$bleibt->id, $geht->id]))->toHaveCount(1);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Suche ueber die Anschrift (v0.25.1)
+|--------------------------------------------------------------------------
+|
+| Solange die Produkte einen Spiegel hatten, suchten sie selbst nach dem Ort.
+| Ohne Spiegel ist diese Suche der einzige Weg dorthin.
+*/
+
+it('findet einen Kontakt ueber seinen Ort', function (): void {
+    $kontakt = Contact::factory()->organisation('Bergbau GmbH')->create();
+    $kontakt->addresses()->create(['type' => 'work', 'street' => 'Hauptweg 3', 'zip' => '24103', 'city' => 'Kiel']);
+
+    expect($this->store->search('Kiel')->pluck('formatted_name')->all())->toBe(['Bergbau GmbH']);
+});
+
+it('findet einen Kontakt ueber Strasse und Postleitzahl', function (): void {
+    $kontakt = Contact::factory()->organisation('Bergbau GmbH')->create();
+    $kontakt->addresses()->create(['type' => 'work', 'street' => 'Hauptweg 3', 'zip' => '24103', 'city' => 'Kiel']);
+
+    expect($this->store->search('Hauptweg')->pluck('id')->all())->toBe([$kontakt->id])
+        ->and($this->store->search('24103')->pluck('id')->all())->toBe([$kontakt->id]);
+});
+
+it('findet einen Kontakt ohne Anschrift weiterhin ueber den Namen', function (): void {
+    Contact::factory()->organisation('Bergbau GmbH')->create();
+
+    expect($this->store->search('Bergbau'))->toHaveCount(1);
+});

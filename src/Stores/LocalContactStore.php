@@ -138,7 +138,18 @@ class LocalContactStore implements ContactStore
                 // Auch ueber die Adressen: Wer eine Mail vor sich hat, sucht
                 // mit der Adresse und nicht mit dem Namen — den kennt er ja
                 // gerade nicht.
-                ->orWhereHas('emails', fn ($e) => $e->where('value', 'like', "%{$query}%")))
+                ->orWhereHas('emails', fn ($e) => $e->where('value', 'like', "%{$query}%"))
+                // Und ueber die Anschrift.
+                //
+                // Ergaenzt am 24.09.2026: Solange die Produkte einen lokalen
+                // Spiegel hatten, suchten sie selbst per SQL nach dem Ort.
+                // Ohne Spiegel ist diese Suche der einzige Weg dorthin — und
+                // sie kannte den Ort bis dahin nicht. Eine Suche, die zu
+                // wenig findet, sieht aus wie „gibt es nicht".
+                ->orWhereHas('addresses', fn ($a) => $a
+                    ->where('city', 'like', "%{$query}%")
+                    ->orWhere('street', 'like', "%{$query}%")
+                    ->orWhere('zip', 'like', "%{$query}%")))
             ->limit($limit)
             ->get();
     }

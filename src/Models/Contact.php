@@ -325,8 +325,32 @@ class Contact extends Model
     }
 
     /** Die Organisationen, für die diese Person arbeitet. */
+    /**
+     * Organisationen, die schon mitgeliefert wurden.
+     *
+     * Wie bei {@see withContactPersons()}: Ohne lokalen Spiegel gibt es
+     * keine Beziehungstabelle, die man fragen koennte.
+     *
+     * @var Collection<int, Contact>|null
+     */
+    private ?Collection $mitgelieferteOrganisationen = null;
+
+    /**
+     * @param  Collection<int, Contact>  $organisationen
+     */
+    public function withOrganizations(Collection $organisationen): static
+    {
+        $this->mitgelieferteOrganisationen = $organisationen;
+
+        return $this;
+    }
+
     public function organizations(): Collection
     {
+        if ($this->mitgelieferteOrganisationen !== null) {
+            return $this->mitgelieferteOrganisationen;
+        }
+
         return $this->relations()
             ->where('type', ContactRelation::WorksFor)
             ->with('related')
